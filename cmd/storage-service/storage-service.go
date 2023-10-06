@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,14 +28,14 @@ func (storage StorageImpl) Set(key string, value string) error {
 	}
 	defer func() {
 		if err = file.Close(); err != nil {
-			log.Fatalf("Close file error. Err: %s", err)
+			log.Printf("Close file error. Err: %s", err)
 		}
 	}()
 
 	line := "key=" + key + " " + "value=" + value + "\n"
 	_, writeError := file.WriteString(line)
 	if writeError != nil {
-		log.Fatalf("Write data in file error. Err: %s", writeError)
+		log.Printf("Write data in file error. Err: %s", writeError)
 		return writeError
 	}
 	return nil
@@ -47,7 +48,7 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	}
 	defer func() {
 		if err = file.Close(); err != nil {
-			log.Fatalf("Close file error. Err: %s", err)
+			log.Printf("Close file error. Err: %s", err)
 		}
 	}()
 
@@ -59,6 +60,11 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineElements := strings.Split(line, " ")
+		if len(line) == 0 {
+			keyError = errors.New(fmt.Sprintf("Key %s does not exist", key))
+			log.Printf("Not existing key error. Err: %s", keyError)
+			return value, keyError
+		}
 		storageKey := strings.Split(lineElements[0], "=")[1]
 		storageValue := strings.Split(lineElements[1], "=")[1]
 
@@ -69,14 +75,14 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	}
 
 	if !flag {
-		keyError = os.ErrNotExist
-		log.Fatalf("Not existing key error. Err: %s", keyError)
+		keyError = errors.New(fmt.Sprintf("Key %s does not exist", key))
+		log.Printf("Not existing key error. Err: %s", keyError)
 	} else {
 		keyError = nil
 	}
 
 	if scannerErr := scanner.Err(); err != nil {
-		log.Fatalf("Scanner error. Err: %s", scannerErr)
+		log.Printf("Scanner error. Err: %s", scannerErr)
 		return "", scannerErr
 	}
 
@@ -102,7 +108,7 @@ func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Requ
 	if getFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Get function error. Err: %s", getFunctionErr)
-		log.Fatalf("Get function error. Err: %s", getFunctionErr)
+		log.Printf("Get function error. Err: %s\n", getFunctionErr)
 	}
 
 	resp := make(map[string]string)
@@ -111,11 +117,11 @@ func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Requ
 	resp["error"] = respError
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
-		log.Fatalf("Error happened in JSON marshal. Err: %s", parseJsonErr)
+		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)
 	}
 
 	if _, writeResponseErr := w.Write(jsonResp); writeResponseErr != nil {
-		log.Fatalf("Write response error. Err: %s", writeResponseErr)
+		log.Printf("Write response error. Err: %s", writeResponseErr)
 	}
 
 	return
@@ -132,7 +138,7 @@ func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Requ
 	if setFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Set function error. Err: %s", setFunctionErr)
-		log.Fatalf("Set function error. Err: %s", setFunctionErr)
+		log.Printf("Set function error. Err: %s", setFunctionErr)
 	}
 
 	resp := make(map[string]string)
@@ -140,11 +146,11 @@ func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Requ
 	resp["error"] = respError
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
-		log.Fatalf("Error happened in JSON marshal. Err: %s", parseJsonErr)
+		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)
 	}
 
 	if _, writeResponseErr := w.Write(jsonResp); writeResponseErr != nil {
-		log.Fatalf("Write response error. Err: %s", writeResponseErr)
+		log.Printf("Write response error. Err: %s", writeResponseErr)
 	}
 
 	return
@@ -161,5 +167,5 @@ func main() {
 	http.HandleFunc(setUrl, storageService.Set)
 	addr := fmt.Sprintf(":%s", serverPort)
 	setListenPortError := http.ListenAndServe(addr, nil)
-	log.Fatalf("Listen and serve port failed. Err: %s", setListenPortError)
+	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }

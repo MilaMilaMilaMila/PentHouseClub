@@ -1,0 +1,12 @@
+services:
+  client:
+    image:
+    build:
+      dockerfile: Dockerfile
+    tty: true
+    stdin_open: true
+    environment:
+      - SERVER_ADDRESS: http://storage:8080
+
+  storage:
+

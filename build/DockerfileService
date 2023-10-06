@@ -1,0 +1,5 @@
+FROM golang:1.20
+COPY .. /app
+WORKDIR /app
+RUN go build -o storage-service.go ./cmd/storage-service/storage-service.go
+CMD ./client
