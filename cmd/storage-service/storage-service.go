@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-const serverPort = "8080"
-
 type Storage interface {
 	Get(key string) (string, error)
 	Set(key string, value string) error
@@ -165,7 +163,20 @@ func main() {
 
 	http.HandleFunc(getUrl, storageService.Get)
 	http.HandleFunc(setUrl, storageService.Set)
-	addr := fmt.Sprintf(":%s", serverPort)
+	file, err := os.OpenFile("config.txt", os.O_RDONLY, 0644)
+	if err != nil {
+		log.Printf("Open file error. Err: %s", err)
+	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Printf("Close file error. Err: %s", err)
+		}
+	}()
+	scanner := bufio.NewScanner(file)
+	scanner.Scan()
+	line := scanner.Text()
+	lineElements := strings.Split(line, "=")
+	addr := lineElements[1]
 	setListenPortError := http.ListenAndServe(addr, nil)
 	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }
