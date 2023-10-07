@@ -1,15 +1,19 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/caarlos0/env/v9"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
+
+type ConfigDatabase struct {
+	Port string `env:"PORT" envDefault:"8080"`
+	Host string `env:"HOST" envDefault:"localhost"`
+}
 
 type Client interface {
 	get(key string) (string, error)
@@ -20,10 +24,6 @@ type ClientImpl struct {
 	baseUrl string
 }
 
-func NewClientImpl(baseUrl string) *ClientImpl {
-	return &ClientImpl{baseUrl: baseUrl}
-}
-
 type RespJson struct {
 	Value   string `json:"value"`
 	Message string `json:"message"`
@@ -31,22 +31,14 @@ type RespJson struct {
 }
 
 func main() {
-	file, err := os.OpenFile("config.txt", os.O_RDONLY, 0644)
+	var cfg ConfigDatabase
+
+	err := env.Parse(&cfg)
 	if err != nil {
-		log.Printf("Open file error. Err: %s", err)
+		fmt.Println(err.Error())
 	}
-	defer func() {
-		if err = file.Close(); err != nil {
-			log.Printf("Close file error. Err: %s", err)
-		}
-	}()
-	scanner := bufio.NewScanner(file)
-	scanner.Scan()
-	line := scanner.Text()
-	lineElements := strings.Split(line, "=")
-	URL := lineElements[1]
 	var client Client
-	client = ClientImpl{URL}
+	client = ClientImpl{"http://" + cfg.Host + ":" + cfg.Port}
 	if len(os.Args) <= 1 {
 		fmt.Println("Invalid arguments. Key is required")
 		os.Exit(1)

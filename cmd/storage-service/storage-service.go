@@ -163,7 +163,7 @@ func main() {
 
 	http.HandleFunc(getUrl, storageService.Get)
 	http.HandleFunc(setUrl, storageService.Set)
-	file, err := os.OpenFile("config.txt", os.O_RDONLY, 0644)
+	file, err := os.OpenFile("cmd/storage-service/config.txt", os.O_RDONLY, 0644)
 	if err != nil {
 		log.Printf("Open file error. Err: %s", err)
 	}
