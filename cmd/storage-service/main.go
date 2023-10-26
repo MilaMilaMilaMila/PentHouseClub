@@ -2,18 +2,32 @@ package main
 
 import (
 	"PentHouseClub/internal/storage-service"
+	"PentHouseClub/internal/storage-service/config"
 	"bufio"
 	"fmt"
+	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
-func main() {
-	var app storage_service.App
-	var storageService = app.Init()
+const configPath = "internal/storage-service/config/config.yaml"
 
+func readConfig() config.DataSizeRestriction {
+	viper.SetConfigFile(configPath)
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Panicf("Unable to read config file: %s", err)
+	}
+	dataSizeRestriction := config.DataSizeRestriction{MemTableMaxSize: uintptr(viper.GetInt("MemTableSize"))}
+	return dataSizeRestriction
+}
+
+func main() {
+	dataSizeRestriction := readConfig()
+	var app storage_service.App
+	var storageService = app.Init(dataSizeRestriction.MemTableMaxSize)
+	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")
 
@@ -30,9 +44,9 @@ func main() {
 	}()
 	scanner := bufio.NewScanner(file)
 	scanner.Scan()
-	line := scanner.Text()
-	lineElements := strings.Split(line, "=")
-	addr := lineElements[1]
-	setListenPortError := http.ListenAndServe(addr, nil)
+	//line := scanner.Text()
+	//lineElements := strings.Split(line, "=")
+	//addr := lineElements[1]
+	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
 	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }

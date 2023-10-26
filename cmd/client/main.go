@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	var cfg config.Database
+	var cfg config.Address
 
 	err := env.Parse(&cfg)
 	if err != nil {

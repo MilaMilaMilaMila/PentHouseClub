@@ -11,10 +11,11 @@ type App struct {
 	service.StorageService
 }
 
-func (app App) Init() service.StorageService {
+func (app App) Init(memTableMaxSize uintptr) service.StorageService {
 	var storageService service.StorageService
 	storageService = service.StorageServiceImpl{Storage: storage.StorageImpl{
-		AvlTree: avltree.NewPairTree(avltree.AllowDuplicates),
+		MemTable: storage.MemTable{AvlTree: avltree.NewPairTree(avltree.AllowDuplicates),
+			MaxSize: memTableMaxSize},
 	}}
 	return storageService
 }
