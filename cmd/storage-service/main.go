@@ -19,14 +19,18 @@ func readConfig() config.DataSizeRestriction {
 	if err != nil {
 		log.Panicf("Unable to read config file: %s", err)
 	}
-	dataSizeRestriction := config.DataSizeRestriction{MemTableMaxSize: uintptr(viper.GetInt("MemTableSize"))}
+	dataSizeRestriction := config.DataSizeRestriction{
+		MemTableMaxSize:         uintptr(viper.GetInt("MemTableSize")),
+		SsTableSegmentMaxLength: viper.GetInt64("ssTableSegmentLength"),
+		SsTableDir:              viper.GetString("ssTableDir"),
+	}
 	return dataSizeRestriction
 }
 
 func main() {
 	dataSizeRestriction := readConfig()
 	var app storage_service.App
-	var storageService = app.Init(dataSizeRestriction.MemTableMaxSize)
+	var storageService = app.Init(dataSizeRestriction)
 	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")

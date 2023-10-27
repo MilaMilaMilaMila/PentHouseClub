@@ -3,9 +3,10 @@ module PentHouseClub
 go 1.21
 
 require (
-	github.com/ancientlore/go-avltree v1.0.3
 	github.com/caarlos0/env/v9 v9.0.0
+	github.com/google/uuid v1.1.2
 	github.com/spf13/viper v1.17.0
+	gopkg.in/OlexiyKhokhlov/avltree.v2 v2.0.1
 )
 
 require (

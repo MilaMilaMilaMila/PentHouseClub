@@ -2,37 +2,41 @@ package storage
 
 import (
 	"errors"
-	"github.com/ancientlore/go-avltree"
+	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"unsafe"
 )
 
 type MemTable struct {
-	AvlTree     *avltree.PairTree
+	AvlTree     *avltree.AVLTree[string, string]
 	MaxSize     uintptr
-	CurrentSize uintptr
+	CurrentSize *uintptr
 }
 
-func (memTable MemTable) CalculateSize() uintptr {
-	return unsafe.Sizeof(memTable)
-}
-
-func (memTable MemTable) Add(key string, value string) {
-	if memTable.CurrentSize > memTable.MaxSize {
-		memTable.AvlTree.Clear()
+func (memTable *MemTable) Add(key string, value string) error {
+	var pair = memTable.AvlTree.Find(key)
+	if pair != nil {
+		memTable.AvlTree.Erase(key)
 	} else {
-		memTable.CurrentSize += unsafe.Sizeof(key) + unsafe.Sizeof(value) + 8
-		keyValue := &avltree.Pair{
-			Key:   key,
-			Value: value,
+		addSize := unsafe.Sizeof(key) + unsafe.Sizeof(value) + 8
+		memTable.AvlTree.Insert(key, value)
+		var newSize = *memTable.CurrentSize + addSize
+		if newSize+addSize > memTable.MaxSize {
+			return errors.New("MemTable size was exceeded")
 		}
-		memTable.AvlTree.Add(*keyValue)
+		*memTable.CurrentSize = newSize
 	}
+	return nil
 }
 
-func (memTable MemTable) Find(key string) (string, error) {
-	pair := memTable.AvlTree.Find(key)
-	if pair == nil {
-		return "", errors.New("key not found")
+func (memTable *MemTable) Find(key string) (string, error) {
+	val := memTable.AvlTree.Find(key)
+	if val == nil {
+		return "", errors.New("key was not found")
 	}
-	return pair.Value.(string), nil
+	return *val, nil
+}
+
+func (memTable *MemTable) Clear() {
+	memTable.AvlTree.Clear()
+	*memTable.CurrentSize = *new(uintptr)
 }

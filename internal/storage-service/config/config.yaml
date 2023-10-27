@@ -1,1 +1,3 @@
-MemTableSize: 1000
+MemTableSize: 210
+ssTableSegmentLength: 50
+ssTableDir: ssTables
