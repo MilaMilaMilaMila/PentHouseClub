@@ -9,14 +9,25 @@ import (
 )
 
 type SegmentZip interface {
-	Zip(file *os.File, sparseIndex *map[string]int64, segmentLength int64)
-	Unzip(segment *bytes.Buffer) []byte
+	Zip(dirPath string, sparseIndex *map[string]int64, segmentLength int64) (string, map[string]int64, int64)
+	Unzip(segment *[]byte) []byte
 }
 
 type SegmentGZip struct{}
 
-func (segmentGZip SegmentGZip) Zip(file *os.File, sparseIndex *map[string]int64, segmentLength int64) {
-	compressedFile, err := os.Create("tmp.gz")
+func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]int64, segmentLength int64) (string, map[string]int64, int64) {
+	file, err := os.OpenFile(dirPath, os.O_RDONLY, 0644)
+	if err != nil {
+		log.Printf("Open sstable file error. Err: %s", err)
+	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Printf("Close sstable file error. Err: %s", err)
+		}
+	}()
+
+	newDirPath := dirPath[:len(dirPath)-4] + ".gz"
+	compressedFile, err := os.OpenFile(newDirPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Zip sstable file error. Err: %s", err)
 	}
@@ -26,16 +37,14 @@ func (segmentGZip SegmentGZip) Zip(file *os.File, sparseIndex *map[string]int64,
 			log.Printf("Close sstable file error. Err: %s", err)
 		}
 	}(compressedFile)
-	writer := gzip.NewWriter(compressedFile)
-	defer func(writer *gzip.Writer) {
-		err := writer.Close()
-		if err != nil {
-			log.Printf("Close sstable file error. Err: %s", err)
-		}
-	}(writer)
 
 	index := *sparseIndex
+	newIndex := make(map[string]int64)
+	newSegment := int64(0)
+	newSegmentLength := int64(0)
+	flag := false
 	for keyTable := range index {
+		newIndex[keyTable] = newSegment
 		neededSegmentLine := index[keyTable]
 		_, err = file.Seek(neededSegmentLine, 0)
 		if err != nil {
@@ -46,27 +55,39 @@ func (segmentGZip SegmentGZip) Zip(file *os.File, sparseIndex *map[string]int64,
 		if err != nil {
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
-		_, err = writer.Write(data)
+
+		var compressedBuffer bytes.Buffer
+		buffWriter := gzip.NewWriter(&compressedBuffer)
+		_, err = buffWriter.Write(data)
+		if err != nil {
+			log.Printf("Segment sstable file error. Err: %s", err)
+		}
+		err = buffWriter.Close()
+		if err != nil {
+			log.Printf("Segment sstable file error. Err: %s", err)
+		}
+
+		_, err = compressedFile.Write(compressedBuffer.Bytes())
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
+		newSegment, err = file.Seek(0, io.SeekCurrent)
+		if flag == false {
+			newSegmentLength = newSegment
+			flag = true
+		}
+		if err != nil {
+			log.Printf("Index zip sstable segment error. Err: %s", err)
+		}
 	}
 
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		log.Printf("Open sstable segment error. Err: %s", err)
-	}
-
-	_, err = io.Copy(file, compressedFile)
-	if err != nil {
-		log.Printf("Copy zip sstable segment error. Err: %s", err)
-	}
+	return newDirPath, newIndex, newSegmentLength
 }
 
-func (segmentGZip SegmentGZip) Unzip(segment *bytes.Buffer) []byte {
+func (segmentGZip SegmentGZip) Unzip(segment *[]byte) []byte {
 	var decompressedBuffer bytes.Buffer
 
-	reader, err := gzip.NewReader(bytes.NewReader(segment.Bytes()))
+	reader, err := gzip.NewReader(io.NopCloser(bytes.NewBuffer(*segment)))
 	if err != nil {
 		log.Printf("Read sstable segment error. Err: %s", err)
 	}
