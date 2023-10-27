@@ -59,6 +59,9 @@ func (table SsTable) Init(memTable MemTable) error {
 		currentSize += (int64)(bytesCount)
 		return true
 	})
+	var zipper SegmentZip
+	zipper = SegmentGZip{}
+	zipper.Zip(file, &table.sparseIndex, table.segmentLength)
 	return err
 }
 
