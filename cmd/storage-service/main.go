@@ -23,6 +23,7 @@ func readConfig() config.DataSizeRestriction {
 		MemTableMaxSize:         uintptr(viper.GetInt("MemTableSize")),
 		SsTableSegmentMaxLength: viper.GetInt64("ssTableSegmentLength"),
 		SsTableDir:              viper.GetString("ssTableDir"),
+		JournalPath:             viper.GetString("journalPath"),
 	}
 	return dataSizeRestriction
 }
@@ -30,7 +31,7 @@ func readConfig() config.DataSizeRestriction {
 func main() {
 	dataSizeRestriction := readConfig()
 	var app storage_service.App
-	var storageService = app.Init(dataSizeRestriction)
+	var storageService = app.Start(dataSizeRestriction)
 	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")

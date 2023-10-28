@@ -15,7 +15,11 @@ type MemTable struct {
 func (memTable *MemTable) Add(key string, value string) error {
 	var pair = memTable.AvlTree.Find(key)
 	if pair != nil {
+		if *pair == value {
+			return nil
+		}
 		memTable.AvlTree.Erase(key)
+		memTable.AvlTree.Insert(key, value)
 	} else {
 		addSize := unsafe.Sizeof(key) + unsafe.Sizeof(value) + 8
 		memTable.AvlTree.Insert(key, value)
