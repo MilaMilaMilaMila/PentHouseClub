@@ -59,6 +59,9 @@ func (table SsTable) Init(memTable MemTable) error {
 		currentSize += (int64)(bytesCount)
 		return true
 	})
+	var zipper SegmentZip
+	zipper = SegmentGZip{}
+	table.dirPath, table.sparseIndex, table.segmentLength = zipper.Zip(table.dirPath, &table.sparseIndex, table.segmentLength)
 	return err
 }
 
@@ -79,6 +82,8 @@ func (table SsTable) Find(key string) (string, error) {
 		log.Printf("SsTable with id %s does not contain key", table.id)
 		return "", keyLineError
 	}
+	var zipper SegmentZip
+	zipper = SegmentGZip{}
 	file, err := os.OpenFile(table.dirPath, os.O_RDONLY, 0644)
 	if err != nil {
 		return "", err
@@ -93,11 +98,12 @@ func (table SsTable) Find(key string) (string, error) {
 		return "", nil
 	}
 	data := make([]byte, table.segmentLength)
+	decompressedData := zipper.Unzip(&data)
 	n, err := file.Read(data)
 	if err != nil {
 		return "", nil
 	}
-	segment := string(data[:n])
+	segment := string(decompressedData[:n])
 	value := ""
 	keyValuePairs := strings.Split(segment, ";")
 	for _, kvp := range keyValuePairs {
