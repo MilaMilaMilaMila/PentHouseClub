@@ -45,6 +45,7 @@ func (app App) Start(configInfo config.DataSizeRestriction) service.StorageServi
 		log.Printf("Restoring AVL tree")
 		memTable.AvlTree, *memTable.CurrentSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName))
 	}
+	os.RemoveAll(journalPath)
 	return app.Init(configInfo, memTable, journalPath)
 }
 
