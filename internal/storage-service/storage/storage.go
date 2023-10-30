@@ -29,11 +29,16 @@ func (storage StorageImpl) Set(key string, value string) error {
 		log.Printf("Copy MemTable to the ssTable")
 		var id = uuid.New()
 		filePath := filepath.Join(storage.SsTableDir, id.String())
-		var newTable = SsTable{dirPath: filePath + ".bin", segmentLength: storage.SsTableSegmentLength, sparseIndex: make(map[string]int64),
+		journalPath := filepath.Join(storage.SsTableDir, "journal")
+		err := os.Mkdir(journalPath, 0777)
+		if err != nil {
+			log.Printf("error occuring while creating ssTable journal dir. Err: %s", err)
+		}
+		var newTable = SsTable{dirPath: filePath + ".bin", journalPath: filepath.Join(journalPath, id.String()) + ".bin", segmentLength: storage.SsTableSegmentLength, sparseIndex: make(map[string]SparseIndices),
 			id: uuid.New()}
 		newTable.Init(storage.MemTable)
 		storage.MemTable.Clear()
-		err := os.Remove(filepath.Join(storage.JournalPath, GetFileNameInDir(storage.JournalPath)))
+		err = os.Remove(filepath.Join(storage.JournalPath, GetFileNameInDir(storage.JournalPath)))
 		if err != nil {
 			log.Printf("error occuring while deleting journal. Err: %s", err)
 		}
