@@ -67,13 +67,13 @@ func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]int64
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
 
-		_, err = compressedFile.Write(compressedBuffer.Bytes())
+		n2, err := compressedFile.Write(compressedBuffer.Bytes())
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
-		newSegment, err = file.Seek(0, io.SeekCurrent)
+
 		if flag == false {
-			newSegmentLength = newSegment
+			newSegmentLength = int64(n2)
 			flag = true
 		}
 		if err != nil {

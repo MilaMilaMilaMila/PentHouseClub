@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"github.com/google/uuid"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -32,7 +33,10 @@ func (storage StorageImpl) Set(key string, value string) error {
 			id: uuid.New()}
 		newTable.Init(storage.MemTable)
 		storage.MemTable.Clear()
-		os.RemoveAll(storage.JournalPath)
+		err := os.Remove(filepath.Join(storage.JournalPath, GetFileNameInDir(storage.JournalPath)))
+		if err != nil {
+			log.Printf("error occuring while deleting journal. Err: %s", err)
+		}
 		*storage.SsTables = append(*storage.SsTables, newTable)
 	} else {
 		now := time.Now()
@@ -69,4 +73,23 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	}
 	err = errors.New("key was not found")
 	return val, err
+}
+
+func GetFileNameInDir(name string) string {
+	f, err := os.Open(name)
+	if err != nil {
+		log.Printf("Open journal dir error. Err: %s", err)
+		return ""
+	}
+	defer func() {
+		if err = f.Close(); err != nil {
+			log.Printf("Close journal dir error. Err: %s", err)
+		}
+	}()
+
+	fileNames, err := f.Readdirnames(1)
+	if err == io.EOF {
+		return ""
+	}
+	return fileNames[0]
 }

@@ -17,7 +17,7 @@ type SsTable struct {
 	id            uuid.UUID
 }
 
-func (table SsTable) Init(memTable MemTable) error {
+func (table *SsTable) Init(memTable MemTable) error {
 	var currentSize int64
 	var segmentsCount int64
 	file, err := os.OpenFile(table.dirPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -65,7 +65,7 @@ func (table SsTable) Init(memTable MemTable) error {
 	return err
 }
 
-func (table SsTable) Find(key string) (string, error) {
+func (table *SsTable) Find(key string) (string, error) {
 	flagLine := false
 	var neededSegmentLine int64
 	var keyLineError error
@@ -98,11 +98,11 @@ func (table SsTable) Find(key string) (string, error) {
 		return "", nil
 	}
 	data := make([]byte, table.segmentLength)
-	decompressedData := zipper.Unzip(&data)
 	n, err := file.Read(data)
 	if err != nil {
 		return "", nil
 	}
+	decompressedData := zipper.Unzip(&data)
 	segment := string(decompressedData[:n])
 	value := ""
 	keyValuePairs := strings.Split(segment, ";")

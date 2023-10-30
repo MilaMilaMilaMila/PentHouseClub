@@ -6,7 +6,6 @@ import (
 	"PentHouseClub/internal/storage-service/storage"
 	"bufio"
 	"gopkg.in/OlexiyKhokhlov/avltree.v2"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,8 +21,14 @@ type App struct {
 func (app App) Init(configInfo config.DataSizeRestriction, memTable storage.MemTable, journalPath string) service.StorageService {
 	var storageService service.StorageService
 	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SsTableDir)
-	os.Mkdir(dirPath, 0777)
-	os.Mkdir(journalPath, 0777)
+	err := os.Mkdir(dirPath, 0777)
+	if err != nil {
+		log.Printf("error occuring while creating ssTables dir. Err: %s", err)
+	}
+	err = os.Mkdir(journalPath, 0777)
+	if err != nil {
+		log.Printf("error occuring while creating journal dir. Err: %s", err)
+	}
 	storageService = service.StorageServiceImpl{Storage: storage.StorageImpl{
 		MemTable:             memTable,
 		SsTableSegmentLength: configInfo.SsTableSegmentMaxLength,
@@ -40,7 +45,7 @@ func (app App) Start(configInfo config.DataSizeRestriction) service.StorageServi
 		MaxSize:     configInfo.MemTableMaxSize,
 		CurrentSize: new(uintptr)}
 	journalPath := filepath.Join(GetWorkDirAbsPath(), configInfo.JournalPath)
-	journalName := GetFileNameInDir(journalPath)
+	journalName := storage.GetFileNameInDir(journalPath)
 	if journalName != "" {
 		log.Printf("Restoring AVL tree")
 		memTable.AvlTree, *memTable.CurrentSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName))
@@ -85,23 +90,4 @@ func GetWorkDirAbsPath() string {
 	currentDir, _ := os.Getwd()
 	f, _ := filepath.Abs(currentDir)
 	return f
-}
-
-func GetFileNameInDir(name string) string {
-	f, err := os.Open(name)
-	if err != nil {
-		log.Printf("Open journal dir error. Err: %s", err)
-		return ""
-	}
-	defer func() {
-		if err = f.Close(); err != nil {
-			log.Printf("Close journal dir error. Err: %s", err)
-		}
-	}()
-
-	fileNames, err := f.Readdirnames(1)
-	if err == io.EOF {
-		return ""
-	}
-	return fileNames[0]
 }
