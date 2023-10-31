@@ -1,0 +1,7 @@
+FROM golang:1.20
+COPY ../cmd/storage-service /app/cmd/storage-service
+COPY ../internal/storage-service /app/internal/storage-service
+COPY ../go.* /app
+WORKDIR /app
+RUN go build -o storage-service ./cmd/storage-service/main.go
+ENTRYPOINT ["./storage-service"]

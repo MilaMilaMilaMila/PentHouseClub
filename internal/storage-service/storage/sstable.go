@@ -92,6 +92,83 @@ func (table *SsTable) Init(mt MemTable) error {
 	return err
 }
 
+type KeyValuePair struct {
+	Key   string
+	Value string
+}
+
+func (table *SsTable) InitFromSlice(keyValue []KeyValuePair) error {
+	var currentSize int64
+	var segmentsCount int64
+	file, err := os.OpenFile(table.dPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Printf("Close sstable file error. Err: %s", err)
+		}
+	}()
+	err = nil
+	isFirst := true
+	WriteInFile := func(key string, value string) {
+		line := ";" + key + ":" + value
+		if isFirst {
+			line = key + ":" + value
+			isFirst = false
+		}
+		data := []byte(line)
+		dataSize := (int64)(len(data))
+		if dataSize > table.segLen {
+			err = errors.New("segments of SSTable are too small to fit the key-value")
+			return
+		}
+		if currentSize+dataSize > table.segLen {
+			currentSize = 0
+			segmentsCount += 1
+		}
+		if currentSize == 0 {
+			table.ind[key] = SparseIndices{segmentsCount * table.segLen, segmentsCount*table.segLen + table.segLen}
+		}
+		bytesCount, writeError := file.Write(data)
+		if writeError != nil {
+			log.Printf("Write data in sstable file error. Err: %s", writeError)
+			err = writeError
+			return
+		}
+		currentSize += (int64)(bytesCount)
+		return
+	}
+
+	for _, i := range keyValue {
+		WriteInFile(i.Key, i.Value)
+	}
+
+	var zipper Zip
+	zipper = GZip{}
+	table.dPath, table.ind, table.segLen = zipper.Zip(table.dPath, &table.ind, table.segLen)
+
+	journal, err := os.OpenFile(table.jPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Open journal error. Err: %s", err)
+	}
+	defer func() {
+		if err = journal.Close(); err != nil {
+			log.Printf("Close journal error. Err: %s", err)
+		}
+	}()
+	for keyTable := range table.ind {
+		start := table.ind[keyTable].start
+		end := table.ind[keyTable].end
+		_, err = journal.WriteString(keyTable + ":" + strconv.FormatInt(start, 10) + ":" + strconv.FormatInt(end, 10) + "\n")
+		if err != nil {
+			log.Printf("Write in journal error. Err: %s", err)
+		}
+	}
+
+	return err
+}
+
 func (table *SsTable) Find(key string) (string, error) {
 	flagLine := false
 	var neededSegmentLine int64

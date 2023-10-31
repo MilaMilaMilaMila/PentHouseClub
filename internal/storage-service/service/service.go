@@ -19,7 +19,10 @@ type StorageServiceImpl struct {
 
 func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
-	value, getFunctionErr := storageService.Storage.Get(key)
+	value_channel := make(chan string)
+	getFunctionErr_channel := make(chan error)
+	go storageService.Storage.Get(key, value_channel, getFunctionErr_channel)
+	value, getFunctionErr := <-value_channel, <-getFunctionErr_channel
 
 	respMessage := "OK"
 	respError := ""
@@ -52,8 +55,9 @@ func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Requ
 
 	respMessage := "OK"
 	respError := ""
-
-	setFunctionErr := storageService.Storage.Set(key, value)
+	setFunctionErr_channel := make(chan error)
+	go storageService.Storage.Set(key, value, setFunctionErr_channel)
+	setFunctionErr := <-setFunctionErr_channel
 	if setFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Set function error. Err: %s", setFunctionErr)

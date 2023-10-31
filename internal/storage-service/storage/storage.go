@@ -8,24 +8,42 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
 type Storage interface {
-	Get(key string) (string, error)
-	Set(key string, value string) error
+	Get(key string, value_channel chan<- string, getFunctionErr_channel chan<- error)
+	Set(key string, value string, getFunctionErr_channel chan<- error)
+	GC()
 }
 
 type StorageImpl struct {
+	Mutex                sync.RWMutex
 	MemTable             MemTable
 	SsTables             *[]SsTable
 	SsTableSegmentLength int64
 	SsTableDir           string
 	JournalPath          string
+	Merger               Merger
+	MergePeriodSec       int
 }
 
-func (storage StorageImpl) Set(key string, value string) error {
+func (storage *StorageImpl) GC() {
+	ticker := time.NewTicker(30 * time.Second)
+	for _ = range ticker.C {
+		result := make(chan []SsTable)
+		go storage.Merger.MergeAndCompaction(*storage.SsTables, result)
+		resultSsTables := <-result
+		storage.SsTables = &resultSsTables
+	}
+}
+
+func (storage StorageImpl) Set(key string, value string, getFunctionErr_channel chan<- error) {
+	storage.Mutex.Lock()
+	defer storage.Mutex.Unlock()
 	err := storage.MemTable.Add(key, value)
+	getFunctionErr_channel <- err
 	if err != nil {
 		log.Printf("Copy MemTable to the ssTable")
 		var id = uuid.New()
@@ -66,23 +84,31 @@ func (storage StorageImpl) Set(key string, value string) error {
 			log.Printf("Write in journal error. Err: %s", err)
 		}
 	}
-	return nil
+	getFunctionErr_channel <- nil
+	return
 }
 
-func (storage StorageImpl) Get(key string) (string, error) {
+func (storage StorageImpl) Get(key string, value_channel chan<- string, getFunctionErr_channel chan<- error) {
+	storage.Mutex.RLock()
+	defer storage.Mutex.RUnlock()
 	var val, err = storage.MemTable.Find(key)
 	if err == nil {
-		return val, err
+		value_channel <- val
+		getFunctionErr_channel <- err
+		return
 	}
 	for i := len(*storage.SsTables) - 1; i >= 0; i-- {
 		ssTable := (*storage.SsTables)[i]
 		val, err = ssTable.Find(key)
 		if val != "" {
-			return val, err
+			value_channel <- val
+			getFunctionErr_channel <- err
+			return
 		}
 	}
 	err = errors.New("key was not found")
-	return val, err
+	getFunctionErr_channel <- err
+	return
 }
 
 func GetFileNamesInDir(name string) []string {

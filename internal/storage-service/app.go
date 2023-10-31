@@ -29,13 +29,22 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 	if err != nil {
 		log.Printf("error occuring while creating journal dir. Err: %s", err)
 	}
-	storageService = service.StorageServiceImpl{Storage: storage.StorageImpl{
+	merger := storage.MergerImpl{
+		MemNewFileLimit:      memTable.MaxSize,
+		StorageSstDirPath:    dirPath,
+		SsTableSegmentLength: configInfo.SSTsegLen,
+	}
+	storage := storage.StorageImpl{
 		MemTable:             memTable,
 		SsTableSegmentLength: configInfo.SSTsegLen,
 		SsTableDir:           dirPath,
 		SsTables:             ssTables,
 		JournalPath:          journalPath,
-	}}
+		Merger:               merger,
+		MergePeriodSec:       configInfo.GCperiodSec,
+	}
+	go storage.GC()
+	storageService = service.StorageServiceImpl{Storage: &storage}
 
 	return storageService
 }
