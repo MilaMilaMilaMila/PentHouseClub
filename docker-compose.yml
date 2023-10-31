@@ -1,0 +1,25 @@
+services:
+  client:
+    image: client:latest
+    build:
+      dockerfile: build/ClientDockerfile
+    tty: true
+    stdin_open: true
+    environment:
+      HOST: storage
+      PORT: 8080
+
+  storage:
+    image: storage:latest
+    build:
+      dockerfile: build/ServiceDockerfile
+    environment:
+      MTSIZE: 210
+      SSTABLESEGLEN: 50
+      SSTABLEDIR: ssTables
+      JOURNALPATH: WAL
+    volumes:
+      - LSMstorage:/app/ssTables
+
+volumes:
+  LSMstorage:
