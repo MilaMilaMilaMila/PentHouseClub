@@ -7,9 +7,9 @@ import (
 )
 
 type MemTable struct {
-	AvlTree     *avltree.AVLTree[string, string]
-	MaxSize     uintptr
-	CurrentSize *uintptr
+	AvlTree  *avltree.AVLTree[string, string]
+	MaxSize  uintptr
+	CurrSize *uintptr
 }
 
 func (memTable *MemTable) Add(key string, value string) error {
@@ -23,11 +23,11 @@ func (memTable *MemTable) Add(key string, value string) error {
 	} else {
 		addSize := unsafe.Sizeof(key) + unsafe.Sizeof(value) + 8
 		memTable.AvlTree.Insert(key, value)
-		var newSize = *memTable.CurrentSize + addSize
+		var newSize = *memTable.CurrSize + addSize
 		if newSize+addSize > memTable.MaxSize {
 			return errors.New("MemTable size was exceeded")
 		}
-		*memTable.CurrentSize = newSize
+		*memTable.CurrSize = newSize
 	}
 	return nil
 }
@@ -42,5 +42,5 @@ func (memTable *MemTable) Find(key string) (string, error) {
 
 func (memTable *MemTable) Clear() {
 	memTable.AvlTree.Clear()
-	*memTable.CurrentSize = *new(uintptr)
+	*memTable.CurrSize = *new(uintptr)
 }

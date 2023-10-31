@@ -8,14 +8,14 @@ import (
 	"os"
 )
 
-type SegmentZip interface {
+type Zip interface {
 	Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64)
 	Unzip(segment *[]byte) []byte
 }
 
-type SegmentGZip struct{}
+type GZip struct{}
 
-func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64) {
+func (z GZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64) {
 	file, err := os.OpenFile(dirPath, os.O_RDONLY, 0644)
 	if err != nil {
 		log.Printf("Open sstable file error. Err: %s", err)
@@ -26,8 +26,8 @@ func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]Spars
 		}
 	}()
 
-	newDirPath := dirPath[:len(dirPath)-4] + ".gz"
-	compressedFile, err := os.OpenFile(newDirPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	ndp := dirPath[:len(dirPath)-4] + ".gz"
+	cf, err := os.OpenFile(ndp, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Zip sstable file error. Err: %s", err)
 	}
@@ -36,16 +36,16 @@ func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]Spars
 		if err != nil {
 			log.Printf("Close sstable file error. Err: %s", err)
 		}
-	}(compressedFile)
+	}(cf)
 
-	index := *sparseIndex
-	newIndex := make(map[string]SparseIndices)
-	newSegment := int64(0)
-	newSegmentLength := int64(0)
-	flag := false
-	for keyTable := range index {
-		neededSegmentLine := index[keyTable].start
-		_, err = file.Seek(neededSegmentLine, 0)
+	i := *sparseIndex
+	newI := make(map[string]SparseIndices)
+	newSeg := int64(0)
+	newSegLen := int64(0)
+	f := false
+	for keyTable := range i {
+		sedLen := i[keyTable].start
+		_, err = file.Seek(sedLen, 0)
 		if err != nil {
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
@@ -55,8 +55,8 @@ func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]Spars
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
 
-		var compressedBuffer bytes.Buffer
-		buffWriter := gzip.NewWriter(&compressedBuffer)
+		var cBuff bytes.Buffer
+		buffWriter := gzip.NewWriter(&cBuff)
 		_, err = buffWriter.Write(data)
 		if err != nil {
 			log.Printf("Segment sstable file error. Err: %s", err)
@@ -66,27 +66,27 @@ func (segmentGZip SegmentGZip) Zip(dirPath string, sparseIndex *map[string]Spars
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
 
-		n2, err := compressedFile.Write(compressedBuffer.Bytes())
+		n2, err := cf.Write(cBuff.Bytes())
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
-		newIndex[keyTable] = SparseIndices{newSegment, int64(n2)}
-		newSegment += int64(n2)
+		newI[keyTable] = SparseIndices{newSeg, int64(n2)}
+		newSeg += int64(n2)
 
-		if flag == false {
-			newSegmentLength = int64(n2)
-			flag = true
+		if f == false {
+			newSegLen = int64(n2)
+			f = true
 		}
 		if err != nil {
 			log.Printf("Index zip sstable segment error. Err: %s", err)
 		}
 	}
 
-	return newDirPath, newIndex, newSegmentLength
+	return ndp, newI, newSegLen
 }
 
-func (segmentGZip SegmentGZip) Unzip(segment *[]byte) []byte {
-	var decompressedBuffer bytes.Buffer
+func (z GZip) Unzip(segment *[]byte) []byte {
+	var decompBuff bytes.Buffer
 
 	reader, err := gzip.NewReader(io.NopCloser(bytes.NewBuffer(*segment)))
 	if err != nil {
@@ -99,10 +99,10 @@ func (segmentGZip SegmentGZip) Unzip(segment *[]byte) []byte {
 		}
 	}(reader)
 
-	_, err = io.Copy(&decompressedBuffer, reader)
+	_, err = io.Copy(&decompBuff, reader)
 	if err != nil {
 		log.Printf("Unzip sstable segment error. Err: %s", err)
 	}
 
-	return decompressedBuffer.Bytes()
+	return decompBuff.Bytes()
 }

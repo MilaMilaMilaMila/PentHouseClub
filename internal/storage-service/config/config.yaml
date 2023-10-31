@@ -1,4 +1,0 @@
-MemTableSize: 210
-ssTableSegmentLength: 50
-ssTableDir: ssTables
-journalPath: WAL

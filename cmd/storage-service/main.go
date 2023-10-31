@@ -3,52 +3,28 @@ package main
 import (
 	"PentHouseClub/internal/storage-service"
 	"PentHouseClub/internal/storage-service/config"
-	"bufio"
 	"fmt"
 	"github.com/spf13/viper"
 	"log"
 	"net/http"
-	"os"
 )
 
-const configPath = "internal/storage-service/config/config.yaml"
-
-func readConfig() config.DataSizeRestriction {
-	viper.SetConfigFile(configPath)
-	err := viper.ReadInConfig()
-	if err != nil {
-		log.Panicf("Unable to read config file: %s", err)
-	}
-	dataSizeRestriction := config.DataSizeRestriction{
-		MemTableMaxSize:         uintptr(viper.GetInt("MemTableSize")),
-		SsTableSegmentMaxLength: viper.GetInt64("ssTableSegmentLength"),
-		SsTableDir:              viper.GetString("ssTableDir"),
-		JournalPath:             viper.GetString("journalPath"),
-	}
-	return dataSizeRestriction
+func readConfig() *config.LSMconfig {
+	conf := config.New()
+	return conf
 }
 
 func main() {
-	dataSizeRestriction := readConfig()
+	conf := readConfig()
 	var app storage_service.App
-	var storageService = app.Start(dataSizeRestriction)
+	var storageService = app.Start(*conf)
 	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")
 
 	http.HandleFunc(getUrl, storageService.Get)
 	http.HandleFunc(setUrl, storageService.Set)
-	file, err := os.OpenFile("internal/storage-service/config/config.txt", os.O_RDONLY, 0644)
-	if err != nil {
-		log.Printf("Open file error. Err: %s", err)
-	}
-	defer func() {
-		if err = file.Close(); err != nil {
-			log.Printf("Close file error. Err: %s", err)
-		}
-	}()
-	scanner := bufio.NewScanner(file)
-	scanner.Scan()
+
 	//line := scanner.Text()
 	//lineElements := strings.Split(line, "=")
 	//addr := lineElements[1]

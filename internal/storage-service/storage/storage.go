@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -30,15 +31,18 @@ func (storage StorageImpl) Set(key string, value string) error {
 		var id = uuid.New()
 		filePath := filepath.Join(storage.SsTableDir, id.String())
 		journalPath := filepath.Join(storage.SsTableDir, "journal")
-		err := os.Mkdir(journalPath, 0777)
+		err := os.MkdirAll(journalPath, 0777)
 		if err != nil {
 			log.Printf("error occuring while creating ssTable journal dir. Err: %s", err)
 		}
-		var newTable = SsTable{dirPath: filePath + ".bin", journalPath: filepath.Join(journalPath, id.String()) + ".bin", segmentLength: storage.SsTableSegmentLength, sparseIndex: make(map[string]SparseIndices),
+		var newTable = SsTable{dPath: filePath + ".bin", jPath: filepath.Join(journalPath, id.String()) + ".bin", segLen: storage.SsTableSegmentLength, ind: make(map[string]SparseIndices),
 			id: uuid.New()}
 		newTable.Init(storage.MemTable)
 		storage.MemTable.Clear()
-		err = os.Remove(filepath.Join(storage.JournalPath, GetFileNameInDir(storage.JournalPath)))
+		filenames := GetFileNamesInDir(storage.JournalPath)
+		if len(filenames) != 0 {
+			err = os.Remove(filepath.Join(storage.JournalPath, filenames[0]))
+		}
 		if err != nil {
 			log.Printf("error occuring while deleting journal. Err: %s", err)
 		}
@@ -70,7 +74,8 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	if err == nil {
 		return val, err
 	}
-	for _, ssTable := range *storage.SsTables {
+	for i := len(*storage.SsTables) - 1; i >= 0; i-- {
+		ssTable := (*storage.SsTables)[i]
 		val, err = ssTable.Find(key)
 		if val != "" {
 			return val, err
@@ -80,21 +85,21 @@ func (storage StorageImpl) Get(key string) (string, error) {
 	return val, err
 }
 
-func GetFileNameInDir(name string) string {
+func GetFileNamesInDir(name string) []string {
 	f, err := os.Open(name)
 	if err != nil {
 		log.Printf("Open journal dir error. Err: %s", err)
-		return ""
+		return make([]string, 0)
 	}
 	defer func() {
 		if err = f.Close(); err != nil {
 			log.Printf("Close journal dir error. Err: %s", err)
 		}
 	}()
-
-	fileNames, err := f.Readdirnames(1)
+	files, _ := ioutil.ReadDir(name)
+	fileNames, err := f.Readdirnames(len(files))
 	if err == io.EOF {
-		return ""
+		return make([]string, 0)
 	}
-	return fileNames[0]
+	return fileNames
 }

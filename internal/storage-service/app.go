@@ -18,40 +18,52 @@ type App struct {
 	service.StorageService
 }
 
-func (app App) Init(configInfo config.DataSizeRestriction, memTable storage.MemTable, journalPath string) service.StorageService {
+func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) service.StorageService {
 	var storageService service.StorageService
-	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SsTableDir)
-	err := os.Mkdir(dirPath, 0777)
+	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
+	err := os.MkdirAll(dirPath, 0777)
 	if err != nil {
 		log.Printf("error occuring while creating ssTables dir. Err: %s", err)
 	}
-	err = os.Mkdir(journalPath, 0777)
+	err = os.MkdirAll(journalPath, 0777)
 	if err != nil {
 		log.Printf("error occuring while creating journal dir. Err: %s", err)
 	}
 	storageService = service.StorageServiceImpl{Storage: storage.StorageImpl{
 		MemTable:             memTable,
-		SsTableSegmentLength: configInfo.SsTableSegmentMaxLength,
+		SsTableSegmentLength: configInfo.SSTsegLen,
 		SsTableDir:           dirPath,
-		SsTables:             new([]storage.SsTable),
+		SsTables:             ssTables,
 		JournalPath:          journalPath,
 	}}
 
 	return storageService
 }
 
-func (app App) Start(configInfo config.DataSizeRestriction) service.StorageService {
+func (app App) Start(configInfo config.LSMconfig) service.StorageService {
 	var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
-		MaxSize:     configInfo.MemTableMaxSize,
-		CurrentSize: new(uintptr)}
-	journalPath := filepath.Join(GetWorkDirAbsPath(), configInfo.JournalPath)
-	journalName := storage.GetFileNameInDir(journalPath)
-	if journalName != "" {
+		MaxSize:  configInfo.MtSize,
+		CurrSize: new(uintptr)}
+	journalPath := filepath.Join(GetWorkDirAbsPath(), configInfo.JPath)
+	journalName, _ := os.ReadDir(journalPath)
+	if len(journalName) != 0 {
 		log.Printf("Restoring AVL tree")
-		memTable.AvlTree, *memTable.CurrentSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName))
+		memTable.AvlTree, *memTable.CurrSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName[0].Name()))
 	}
 	os.RemoveAll(journalPath)
-	return app.Init(configInfo, memTable, journalPath)
+	ssTablesDir := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
+	ssTablesJournalPath := filepath.Join(ssTablesDir, "journal")
+	ssTablesjournalName, _ := os.ReadDir(ssTablesJournalPath)
+	var ssTables = new([]storage.SsTable)
+	if len(ssTablesjournalName) != 0 {
+		log.Printf("Restoring ssTables")
+		for _, journal := range ssTablesjournalName {
+			journalPath := filepath.Join(ssTablesJournalPath, journal.Name())
+			ssTableName := filepath.Join(ssTablesDir, journal.Name())
+			*ssTables = append(*ssTables, storage.Restore(ssTableName, journalPath, journal.Name()))
+		}
+	}
+	return app.Init(configInfo, memTable, journalPath, ssTables)
 }
 
 func (app App) RestoreAvlTree(journalPath string) (*avltree.AVLTree[string, string], uintptr) {
