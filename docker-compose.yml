@@ -6,8 +6,10 @@ services:
     tty: true
     stdin_open: true
     environment:
-      HOST: storage
-      PORT: 8080
+      HOST: "${HOST}"
+      PORT: "${PORT}"
+    volume:
+      "./ssTables:/ssTables"
 
   storage:
     image: storage:latest
