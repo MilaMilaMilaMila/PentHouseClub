@@ -2,9 +2,9 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -13,8 +13,8 @@ import (
 )
 
 type Storage interface {
-	Get(key string, value_channel chan<- string, getFunctionErr_channel chan<- error)
-	Set(key string, value string, getFunctionErr_channel chan<- error)
+	Get(key string) (string, error)
+	Set(key string, value string) error
 	GC()
 }
 
@@ -26,50 +26,60 @@ type StorageImpl struct {
 	SsTableDir           string
 	JournalPath          string
 	Merger               Merger
-	MergePeriodSec       int
+	MergePeriodSec       time.Duration
 }
 
-func (storage *StorageImpl) GC() {
-	ticker := time.NewTicker(30 * time.Second)
+// TODO logger сделать
+func (s *StorageImpl) GC() {
+	ticker := time.NewTicker(s.MergePeriodSec)
 	for _ = range ticker.C {
-		result := make(chan []SsTable)
-		go storage.Merger.MergeAndCompaction(*storage.SsTables, result)
-		resultSsTables := <-result
-		storage.SsTables = &resultSsTables
+		fmt.Println("tick start")
+		resultCh := make(chan []SsTable)
+		errCh := make(chan error)
+
+		go s.Merger.MergeAndCompaction(*s.SsTables, resultCh, errCh)
+
+		resultSsTables := <-resultCh
+		err := <-errCh
+		if err != nil {
+			panic(err)
+		}
+
+		s.SsTables = &resultSsTables
+		fmt.Println("tick end")
 	}
 }
 
-func (storage StorageImpl) Set(key string, value string, getFunctionErr_channel chan<- error) {
-	storage.Mutex.Lock()
-	defer storage.Mutex.Unlock()
-	err := storage.MemTable.Add(key, value)
-	getFunctionErr_channel <- err
+func (s *StorageImpl) Set(key string, value string) error {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	err := s.MemTable.Add(key, value)
 	if err != nil {
 		log.Printf("Copy MemTable to the ssTable")
 		var id = uuid.New()
-		filePath := filepath.Join(storage.SsTableDir, id.String())
-		journalPath := filepath.Join(storage.SsTableDir, "journal")
+		filePath := filepath.Join(s.SsTableDir, id.String())
+		journalPath := filepath.Join(s.SsTableDir, "journal")
 		err := os.MkdirAll(journalPath, 0777)
 		if err != nil {
 			log.Printf("error occuring while creating ssTable journal dir. Err: %s", err)
 		}
-		var newTable = SsTable{dPath: filePath + ".bin", jPath: filepath.Join(journalPath, id.String()) + ".bin", segLen: storage.SsTableSegmentLength, ind: make(map[string]SparseIndices),
+		var newTable = SsTable{dPath: filePath + ".bin", jPath: filepath.Join(journalPath, id.String()) + ".bin", segLen: s.SsTableSegmentLength, ind: make(map[string]SparseIndices),
 			id: uuid.New()}
-		newTable.Init(storage.MemTable)
-		storage.MemTable.Clear()
-		filenames := GetFileNamesInDir(storage.JournalPath)
+		newTable.Init(s.MemTable)
+		s.MemTable.Clear()
+		filenames := GetFileNamesInDir(s.JournalPath)
 		if len(filenames) != 0 {
-			err = os.Remove(filepath.Join(storage.JournalPath, filenames[0]))
+			err = os.Remove(filepath.Join(s.JournalPath, filenames[0]))
 		}
 		if err != nil {
 			log.Printf("error occuring while deleting journal. Err: %s", err)
 		}
-		*storage.SsTables = append(*storage.SsTables, newTable)
+		*s.SsTables = append(*s.SsTables, newTable)
 	} else {
 		now := time.Now()
 		var timestamp = now.Format("2006-01-02") + "_" + now.Format("15-04-01")
 
-		filePath := filepath.Join(storage.JournalPath, timestamp)
+		filePath := filepath.Join(s.JournalPath, timestamp)
 		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Printf("Open journal error. Err: %s", err)
@@ -84,31 +94,26 @@ func (storage StorageImpl) Set(key string, value string, getFunctionErr_channel 
 			log.Printf("Write in journal error. Err: %s", err)
 		}
 	}
-	getFunctionErr_channel <- nil
-	return
+
+	return nil
 }
 
-func (storage StorageImpl) Get(key string, value_channel chan<- string, getFunctionErr_channel chan<- error) {
-	storage.Mutex.RLock()
-	defer storage.Mutex.RUnlock()
-	var val, err = storage.MemTable.Find(key)
+func (s *StorageImpl) Get(key string) (string, error) {
+	s.Mutex.RLock()
+	defer s.Mutex.RUnlock()
+	var val, err = s.MemTable.Find(key)
 	if err == nil {
-		value_channel <- val
-		getFunctionErr_channel <- err
-		return
+		return val, err
 	}
-	for i := len(*storage.SsTables) - 1; i >= 0; i-- {
-		ssTable := (*storage.SsTables)[i]
+	for i := len(*s.SsTables) - 1; i >= 0; i-- {
+		ssTable := (*s.SsTables)[i]
 		val, err = ssTable.Find(key)
 		if val != "" {
-			value_channel <- val
-			getFunctionErr_channel <- err
-			return
+			return val, err
 		}
 	}
 	err = errors.New("key was not found")
-	getFunctionErr_channel <- err
-	return
+	return "", err
 }
 
 func GetFileNamesInDir(name string) []string {
@@ -117,12 +122,9 @@ func GetFileNamesInDir(name string) []string {
 		log.Printf("Open journal dir error. Err: %s", err)
 		return make([]string, 0)
 	}
-	defer func() {
-		if err = f.Close(); err != nil {
-			log.Printf("Close journal dir error. Err: %s", err)
-		}
-	}()
-	files, _ := ioutil.ReadDir(name)
+	defer f.Close()
+	// TODO обработать ошибачккю
+	files, _ := os.ReadDir(name)
 	fileNames, err := f.Readdirnames(len(files))
 	if err == io.EOF {
 		return make([]string, 0)
