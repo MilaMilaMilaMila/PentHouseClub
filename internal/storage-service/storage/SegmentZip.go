@@ -70,7 +70,7 @@ func (z GZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segment
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
-		newI[keyTable] = SparseIndices{newSeg, int64(n2)}
+		newI[keyTable] = SparseIndices{newSeg, newSeg + int64(n2)}
 		newSeg += int64(n2)
 
 		if f == false {

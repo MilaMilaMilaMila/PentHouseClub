@@ -42,6 +42,7 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 		JournalPath:          journalPath,
 		Merger:               merger,
 		MergePeriodSec:       configInfo.GCperiodSec,
+		IsMerged:             true,
 	}
 
 	go storage.GC()

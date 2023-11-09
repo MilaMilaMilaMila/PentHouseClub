@@ -27,25 +27,34 @@ type StorageImpl struct {
 	JournalPath          string
 	Merger               Merger
 	MergePeriodSec       time.Duration
+	IsMerged             bool
 }
+
+const minNumberOfTables = 2
 
 // TODO logger сделать
 func (s *StorageImpl) GC() {
 	ticker := time.NewTicker(s.MergePeriodSec)
 	for _ = range ticker.C {
 		fmt.Println("tick start")
-		resultCh := make(chan []SsTable)
-		errCh := make(chan error)
+		//s.Mutex.Lock()
+		if len(*s.SsTables) >= minNumberOfTables && !s.IsMerged {
 
-		go s.Merger.MergeAndCompaction(*s.SsTables, resultCh, errCh)
+			resultCh := make(chan []SsTable)
+			errCh := make(chan error)
+			go s.Merger.MergeAndCompaction(*s.SsTables, resultCh, errCh)
+			fmt.Println("tick end")
+			resultSsTables := <-resultCh
+			err := <-errCh
+			if err != nil {
+				panic(err)
+			}
 
-		resultSsTables := <-resultCh
-		err := <-errCh
-		if err != nil {
-			panic(err)
+			s.SsTables = &resultSsTables
+			s.IsMerged = true
+
 		}
-
-		s.SsTables = &resultSsTables
+		//s.Mutex.Unlock()
 		fmt.Println("tick end")
 	}
 }
@@ -75,6 +84,7 @@ func (s *StorageImpl) Set(key string, value string) error {
 			log.Printf("error occuring while deleting journal. Err: %s", err)
 		}
 		*s.SsTables = append(*s.SsTables, newTable)
+		s.IsMerged = false
 	} else {
 		now := time.Now()
 		var timestamp = now.Format("2006-01-02") + "_" + now.Format("15-04-01")

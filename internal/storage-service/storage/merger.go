@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"github.com/google/uuid"
+	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,16 +24,10 @@ type MergerImpl struct {
 	Mutex                sync.Mutex
 }
 
-const minNumberOfTables = 2
-
 func (merger *MergerImpl) MergeAndCompaction(ssTables []SsTable, newSsTablesCh chan<- []SsTable, errCh chan<- error) {
 	merger.Mutex.Lock()
 	defer merger.Mutex.Unlock()
 
-	if len(ssTables) < minNumberOfTables {
-		newSsTablesCh <- ssTables
-		return
-	}
 	result, err := merger.MergeDescenting(ssTables)
 	newSsTablesCh <- result
 	errCh <- err
@@ -51,11 +46,13 @@ type Segment struct {
 
 type SSTFile struct {
 	FilePath string
+	JPath    string
 	Segments []Segment
 }
 
 func (sstFile *SSTFile) init(ssTable SsTable) {
 	sstFile.FilePath = ssTable.dPath
+	sstFile.JPath = ssTable.jPath
 	sstFile.Segments = make([]Segment, 0)
 	for _, v := range ssTable.ind {
 		segment := Segment{
@@ -139,6 +136,11 @@ func (merger *MergerImpl) GetNextSeg(curFile1SegLine *int, file1Seg *[]KeyValue,
 
 func (merger *MergerImpl) MakeSsTable(keyValuePool []KeyValuePair) SsTable {
 
+	avl := avltree.NewAVLTreeOrderedKey[string, string]()
+	for _, item := range keyValuePool {
+		avl.Insert(item.Key, item.Value)
+	}
+
 	var id = uuid.New()
 	filePath := filepath.Join(merger.StorageSstDirPath, id.String())
 	journalPath := filepath.Join(merger.StorageSstDirPath, "journal")
@@ -151,7 +153,7 @@ func (merger *MergerImpl) MakeSsTable(keyValuePool []KeyValuePair) SsTable {
 	var newTable = SsTable{dPath: filePath + ".bin", jPath: filepath.Join(journalPath, id.String()) + ".bin", segLen: merger.SsTableSegmentLength, ind: make(map[string]SparseIndices),
 		id: uuid.New()}
 
-	err = newTable.InitFromSlice(keyValuePool)
+	err = newTable.InitFromAvl(*avl)
 	if err != nil {
 		return SsTable{}
 	}
@@ -278,10 +280,29 @@ func (merger MergerImpl) Merge(ssT1 []SsTable, ssT2 []SsTable) ([]SsTable, error
 		if err := os.Remove(file.FilePath); err != nil {
 			return nil, err
 		}
+		if err := os.Remove(file.JPath); err != nil {
+			return nil, err
+		}
+		zipFilePath := []rune(file.FilePath)
+		zipFilePath = zipFilePath[0 : len(zipFilePath)-2]
+		zipFilePathS := string(zipFilePath) + "bin"
+		if err := os.Remove(zipFilePathS); err != nil {
+			return nil, err
+		}
+
 	}
 
 	for _, file := range files2 {
 		if err := os.Remove(file.FilePath); err != nil {
+			return nil, err
+		}
+		if err := os.Remove(file.JPath); err != nil {
+			return nil, err
+		}
+		zipFilePath := []rune(file.FilePath)
+		zipFilePath = zipFilePath[0 : len(zipFilePath)-2]
+		zipFilePathS := string(zipFilePath) + "bin"
+		if err := os.Remove(zipFilePathS); err != nil {
 			return nil, err
 		}
 	}
