@@ -46,6 +46,7 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 	}
 
 	go storage.GC()
+
 	storageService = service.StorageServiceImpl{Storage: &storage}
 
 	return storageService
