@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -66,11 +67,16 @@ func (z GZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segment
 			log.Printf("Segment sstable file error. Err: %s", err)
 		}
 
+		currentPosition, err := cf.Seek(0, io.SeekCurrent)
+		if err != nil {
+			fmt.Println(err)
+		}
+
 		n2, err := cf.Write(cBuff.Bytes())
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
-		newI[keyTable] = SparseIndices{newSeg, int64(n2)}
+		newI[keyTable] = SparseIndices{newSeg, currentPosition + int64(n2)}
 		newSeg += int64(n2)
 
 		if f == false {
