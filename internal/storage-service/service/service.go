@@ -8,11 +8,6 @@ import (
 	"net/http"
 )
 
-type StorageService interface {
-	Get(w http.ResponseWriter, r *http.Request)
-	Set(w http.ResponseWriter, r *http.Request)
-}
-
 type StorageServiceImpl struct {
 	Storage storage.Storage
 }

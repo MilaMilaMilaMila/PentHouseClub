@@ -12,6 +12,11 @@ import (
 	"strings"
 )
 
+type Zip interface {
+	Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64)
+	Unzip(segment *[]byte) []byte
+}
+
 type SparseIndices struct {
 	start int64
 	end   int64
@@ -286,11 +291,13 @@ func (table *SsTable) Find(key string) (string, error) {
 	keyValuePairs := strings.Split(segment, ";")
 	for _, kvp := range keyValuePairs {
 		pairElements := strings.Split(kvp, ":")
-		storageKey := pairElements[0]
-		storageValue := pairElements[1]
-		if storageKey == key {
-			value = storageValue
-			return value, nil
+		if len(pairElements) > 1 {
+			storageKey := pairElements[0]
+			storageValue := pairElements[1]
+			if storageKey == key {
+				value = storageValue
+				return value, nil
+			}
 		}
 	}
 	log.Printf("In the ssTable with id %s key was not found", table.id.String())

@@ -13,10 +13,6 @@ import (
 	"unsafe"
 )
 
-type Merger interface {
-	MergeAndCompaction(ssTables []SsTable, newSsTablesCh chan<- []SsTable, errCh chan<- error)
-}
-
 type MergerImpl struct {
 	MemNewFileLimit      uintptr
 	StorageSstDirPath    string
@@ -95,13 +91,15 @@ func (merger *MergerImpl) GetUnzipSegment(ssTFile SSTFile, segmentNumber int) ([
 	keyValuePairs := strings.Split(segment, ";")
 	for _, kvp := range keyValuePairs {
 		pairElements := strings.Split(kvp, ":")
-		storageKey := pairElements[0]
-		storageValue := pairElements[1]
-		keyValue := KeyValue{
-			Value: storageValue,
-			Key:   storageKey,
+		if len(pairElements) > 1 {
+			storageKey := pairElements[0]
+			storageValue := pairElements[1]
+			keyValue := KeyValue{
+				Value: storageValue,
+				Key:   storageKey,
+			}
+			result = append(result, keyValue)
 		}
-		result = append(result, keyValue)
 	}
 
 	return result, nil
@@ -145,7 +143,7 @@ func (merger *MergerImpl) MakeSsTable(keyValuePool []KeyValuePair) SsTable {
 	filePath := filepath.Join(merger.StorageSstDirPath, id.String())
 	journalPath := filepath.Join(merger.StorageSstDirPath, "journal")
 
-	err := os.Mkdir(journalPath, 0777)
+	err := os.MkdirAll(journalPath, 0777)
 	if err != nil {
 		log.Printf("error occuring while creating ssTable journal dir. Err: %s", err)
 	}

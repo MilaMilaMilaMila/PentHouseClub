@@ -12,10 +12,8 @@ import (
 	"time"
 )
 
-type Storage interface {
-	Get(key string) (string, error)
-	Set(key string, value string) error
-	GC()
+type Merger interface {
+	MergeAndCompaction(ssTables []SsTable, newSsTablesCh chan<- []SsTable, errCh chan<- error)
 }
 
 type StorageImpl struct {

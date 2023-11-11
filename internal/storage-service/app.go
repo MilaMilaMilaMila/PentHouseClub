@@ -7,19 +7,31 @@ import (
 	"bufio"
 	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"unsafe"
 )
 
-type App struct {
-	storage.Storage
-	service.StorageService
+type StorageService interface {
+	Get(w http.ResponseWriter, r *http.Request)
+	Set(w http.ResponseWriter, r *http.Request)
 }
 
-func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) service.StorageService {
-	var storageService service.StorageService
+type Storage interface {
+	Get(key string) (string, error)
+	Set(key string, value string) error
+	GC()
+}
+
+type App struct {
+	Storage
+	StorageService
+}
+
+func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) StorageService {
+	var storageService StorageService
 	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
 	err := os.MkdirAll(dirPath, 0777)
 	if err != nil {
@@ -52,7 +64,7 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 	return storageService
 }
 
-func (app App) Start(configInfo config.LSMconfig) service.StorageService {
+func (app App) Start(configInfo config.LSMconfig) StorageService {
 	var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
 		MaxSize:  configInfo.MtSize,
 		CurrSize: new(uintptr)}
