@@ -5,6 +5,8 @@ import (
 	"PentHouseClub/internal/storage-service/service"
 	"PentHouseClub/internal/storage-service/storage"
 	"bufio"
+	"fmt"
+	"github.com/spf13/viper"
 	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"log"
 	"net/http"
@@ -30,7 +32,7 @@ type App struct {
 	StorageService
 }
 
-func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) StorageService {
+func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) {
 	var storageService StorageService
 	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
 	err := os.MkdirAll(dirPath, 0777)
@@ -60,11 +62,15 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 	go storage.GC()
 
 	storageService = service.StorageServiceImpl{Storage: &storage}
+	viper.SetDefault("listen", ":8080")
+	setUrl := fmt.Sprintf("/keys/set")
+	getUrl := fmt.Sprintf("/keys/get")
 
-	return storageService
+	http.HandleFunc(getUrl, storageService.Get)
+	http.HandleFunc(setUrl, storageService.Set)
 }
 
-func (app App) Start(configInfo config.LSMconfig) StorageService {
+func (app App) Start(configInfo config.LSMconfig) {
 	var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
 		MaxSize:  configInfo.MtSize,
 		CurrSize: new(uintptr)}
@@ -74,7 +80,6 @@ func (app App) Start(configInfo config.LSMconfig) StorageService {
 		log.Printf("Restoring AVL tree")
 		memTable.AvlTree, *memTable.CurrSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName[0].Name()))
 	}
-	os.RemoveAll(journalPath)
 	ssTablesDir := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
 	ssTablesJournalPath := filepath.Join(ssTablesDir, "journal")
 	ssTablesjournalName, _ := os.ReadDir(ssTablesJournalPath)
@@ -87,7 +92,10 @@ func (app App) Start(configInfo config.LSMconfig) StorageService {
 			*ssTables = append(*ssTables, storage.Restore(ssTableName, journalPath, journal.Name()))
 		}
 	}
-	return app.Init(configInfo, memTable, journalPath, ssTables)
+	app.Init(configInfo, memTable, journalPath, ssTables)
+
+	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
+	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }
 
 func (app App) RestoreAvlTree(journalPath string) (*avltree.AVLTree[string, string], uintptr) {
