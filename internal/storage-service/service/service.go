@@ -1,15 +1,20 @@
 package service
 
 import (
-	"PentHouseClub/internal/storage-service/storage"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 )
 
+type Storage interface {
+	Get(key string) (string, error)
+	Set(key string, value string) error
+	GC()
+}
+
 type StorageServiceImpl struct {
-	Storage storage.Storage
+	Storage Storage
 }
 
 // TODO нужен конструктор
