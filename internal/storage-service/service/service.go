@@ -1,28 +1,26 @@
 package service
 
 import (
-	"PentHouseClub/internal/storage-service/storage"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 )
 
-type StorageService interface {
-	Get(w http.ResponseWriter, r *http.Request)
-	Set(w http.ResponseWriter, r *http.Request)
+type Storage interface {
+	Get(key string) (string, error)
+	Set(key string, value string) error
+	GC()
 }
 
 type StorageServiceImpl struct {
-	Storage storage.Storage
+	Storage Storage
 }
 
-func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
+// TODO нужен конструктор
+func (s StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
-	value_channel := make(chan string)
-	getFunctionErr_channel := make(chan error)
-	go storageService.Storage.Get(key, value_channel, getFunctionErr_channel)
-	value, getFunctionErr := <-value_channel, <-getFunctionErr_channel
+	value, getFunctionErr := s.Storage.Get(key)
 
 	respMessage := "OK"
 	respError := ""
@@ -49,15 +47,13 @@ func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Requ
 	return
 }
 
-func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
+func (s StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	value := r.URL.Query().Get("value")
 
 	respMessage := "OK"
 	respError := ""
-	setFunctionErr_channel := make(chan error)
-	go storageService.Storage.Set(key, value, setFunctionErr_channel)
-	setFunctionErr := <-setFunctionErr_channel
+	setFunctionErr := s.Storage.Set(key, value)
 	if setFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Set function error. Err: %s", setFunctionErr)
