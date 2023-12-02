@@ -1,19 +1,21 @@
 package storage_service
 
 import (
-	"PentHouseClub/internal/storage-service/config"
-	"PentHouseClub/internal/storage-service/service"
-	"PentHouseClub/internal/storage-service/storage"
 	"bufio"
 	"fmt"
-	"github.com/spf13/viper"
-	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"unsafe"
+
+	"PentHouseClub/internal/storage-service/config"
+	"PentHouseClub/internal/storage-service/service"
+	"PentHouseClub/internal/storage-service/storage"
+	"PentHouseClub/internal/storage-service/storage/impl"
+	"github.com/spf13/viper"
+	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 )
 
 type StorageService interface {
@@ -48,7 +50,7 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 		StorageSstDirPath:    dirPath,
 		SsTableSegmentLength: configInfo.SSTsegLen,
 	}
-	storage := storage.StorageImpl{
+	storage := impl.AvlTreeImpl{
 		MemTable:             memTable,
 		SsTableSegmentLength: configInfo.SSTsegLen,
 		SsTableDir:           dirPath,

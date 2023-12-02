@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
+	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 )
 
 type Zip interface {
@@ -23,17 +24,17 @@ type SparseIndices struct {
 }
 
 type SsTable struct {
-	dPath  string
-	jPath  string
-	segLen int64
-	ind    map[string]SparseIndices
-	id     uuid.UUID
+	DPath  string
+	JPath  string
+	SegLen int64
+	Ind    map[string]SparseIndices
+	Id     uuid.UUID
 }
 
 func (table *SsTable) InitFromAvl(mt avltree.AVLTree[string, string]) error {
 	var currSize int64
 	var segCount int64
-	file, err := os.OpenFile(table.dPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(table.DPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -52,16 +53,16 @@ func (table *SsTable) InitFromAvl(mt avltree.AVLTree[string, string]) error {
 		}
 		data := []byte(line)
 		dataSize := (int64)(len(data))
-		if dataSize > table.segLen {
+		if dataSize > table.SegLen {
 			err = errors.New("segments of SSTable are too small to fit the key-value")
 			return false
 		}
-		if currSize+dataSize > table.segLen {
+		if currSize+dataSize > table.SegLen {
 			currSize = 0
 			segCount += 1
 		}
 		if currSize == 0 {
-			table.ind[key] = SparseIndices{segCount * table.segLen, segCount*table.segLen + table.segLen}
+			table.Ind[key] = SparseIndices{segCount * table.SegLen, segCount*table.SegLen + table.SegLen}
 		}
 		bytesCount, writeError := file.Write(data)
 		if writeError != nil {
@@ -74,9 +75,9 @@ func (table *SsTable) InitFromAvl(mt avltree.AVLTree[string, string]) error {
 	})
 	var zipper Zip
 	zipper = GZip{}
-	table.dPath, table.ind, table.segLen = zipper.Zip(table.dPath, &table.ind, table.segLen)
+	table.DPath, table.Ind, table.SegLen = zipper.Zip(table.DPath, &table.Ind, table.SegLen)
 
-	journal, err := os.OpenFile(table.jPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	journal, err := os.OpenFile(table.JPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Open journal error. Err: %s", err)
 	}
@@ -85,9 +86,9 @@ func (table *SsTable) InitFromAvl(mt avltree.AVLTree[string, string]) error {
 			log.Printf("Close journal error. Err: %s", err)
 		}
 	}()
-	for keyTable := range table.ind {
-		start := table.ind[keyTable].start
-		end := table.ind[keyTable].end
+	for keyTable := range table.Ind {
+		start := table.Ind[keyTable].start
+		end := table.Ind[keyTable].end
 		_, err = journal.WriteString(keyTable + ":" + strconv.FormatInt(start, 10) + ":" + strconv.FormatInt(end, 10) + "\n")
 		if err != nil {
 			log.Printf("Write in journal error. Err: %s", err)
@@ -100,7 +101,7 @@ func (table *SsTable) InitFromAvl(mt avltree.AVLTree[string, string]) error {
 func (table *SsTable) Init(mt MemTable) error {
 	var currSize int64
 	var segCount int64
-	file, err := os.OpenFile(table.dPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(table.DPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -119,16 +120,16 @@ func (table *SsTable) Init(mt MemTable) error {
 		}
 		data := []byte(line)
 		dataSize := (int64)(len(data))
-		if dataSize > table.segLen {
+		if dataSize > table.SegLen {
 			err = errors.New("segments of SSTable are too small to fit the key-value")
 			return false
 		}
-		if currSize+dataSize > table.segLen {
+		if currSize+dataSize > table.SegLen {
 			currSize = 0
 			segCount += 1
 		}
 		if currSize == 0 {
-			table.ind[key] = SparseIndices{segCount * table.segLen, segCount*table.segLen + table.segLen}
+			table.Ind[key] = SparseIndices{segCount * table.SegLen, segCount*table.SegLen + table.SegLen}
 		}
 		bytesCount, writeError := file.Write(data)
 		if writeError != nil {
@@ -141,9 +142,9 @@ func (table *SsTable) Init(mt MemTable) error {
 	})
 	var zipper Zip
 	zipper = GZip{}
-	table.dPath, table.ind, table.segLen = zipper.Zip(table.dPath, &table.ind, table.segLen)
+	table.DPath, table.Ind, table.SegLen = zipper.Zip(table.DPath, &table.Ind, table.SegLen)
 
-	journal, err := os.OpenFile(table.jPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	journal, err := os.OpenFile(table.JPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Open journal error. Err: %s", err)
 	}
@@ -152,9 +153,9 @@ func (table *SsTable) Init(mt MemTable) error {
 			log.Printf("Close journal error. Err: %s", err)
 		}
 	}()
-	for keyTable := range table.ind {
-		start := table.ind[keyTable].start
-		end := table.ind[keyTable].end
+	for keyTable := range table.Ind {
+		start := table.Ind[keyTable].start
+		end := table.Ind[keyTable].end
 		_, err = journal.WriteString(keyTable + ":" + strconv.FormatInt(start, 10) + ":" + strconv.FormatInt(end, 10) + "\n")
 		if err != nil {
 			log.Printf("Write in journal error. Err: %s", err)
@@ -172,7 +173,7 @@ type KeyValuePair struct {
 func (table *SsTable) InitFromSlice(keyValue []KeyValuePair) error {
 	var currentSize int64
 	var segmentsCount int64
-	file, err := os.OpenFile(table.dPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(table.DPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -191,16 +192,16 @@ func (table *SsTable) InitFromSlice(keyValue []KeyValuePair) error {
 		}
 		data := []byte(line)
 		dataSize := (int64)(len(data))
-		if dataSize > table.segLen {
+		if dataSize > table.SegLen {
 			err = errors.New("segments of SSTable are too small to fit the key-value")
 			return
 		}
-		if currentSize+dataSize > table.segLen {
+		if currentSize+dataSize > table.SegLen {
 			currentSize = 0
 			segmentsCount += 1
 		}
 		if currentSize == 0 {
-			table.ind[key] = SparseIndices{segmentsCount * table.segLen, segmentsCount*table.segLen + table.segLen}
+			table.Ind[key] = SparseIndices{segmentsCount * table.SegLen, segmentsCount*table.SegLen + table.SegLen}
 		}
 		bytesCount, writeError := file.Write(data)
 		if writeError != nil {
@@ -218,9 +219,9 @@ func (table *SsTable) InitFromSlice(keyValue []KeyValuePair) error {
 
 	var zipper Zip
 	zipper = GZip{}
-	table.dPath, table.ind, table.segLen = zipper.Zip(table.dPath, &table.ind, table.segLen)
+	table.DPath, table.Ind, table.SegLen = zipper.Zip(table.DPath, &table.Ind, table.SegLen)
 
-	journal, err := os.OpenFile(table.jPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	journal, err := os.OpenFile(table.JPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Open journal error. Err: %s", err)
 	}
@@ -229,9 +230,9 @@ func (table *SsTable) InitFromSlice(keyValue []KeyValuePair) error {
 			log.Printf("Close journal error. Err: %s", err)
 		}
 	}()
-	for keyTable := range table.ind {
-		start := table.ind[keyTable].start
-		end := table.ind[keyTable].end
+	for keyTable := range table.Ind {
+		start := table.Ind[keyTable].start
+		end := table.Ind[keyTable].end
 		_, err = journal.WriteString(keyTable + ":" + strconv.FormatInt(start, 10) + ":" + strconv.FormatInt(end, 10) + "\n")
 		if err != nil {
 			log.Printf("Write in journal error. Err: %s", err)
@@ -247,12 +248,12 @@ func (table *SsTable) Find(key string) (string, error) {
 	var keyLineError error
 	maxIndex := int64(0)
 	neededKey := ""
-	for keyTable := range table.ind {
+	for keyTable := range table.Ind {
 		if key < keyTable {
 			continue
 		} else {
-			if maxIndex <= table.ind[keyTable].start {
-				maxIndex = table.ind[keyTable].start
+			if maxIndex <= table.Ind[keyTable].start {
+				maxIndex = table.Ind[keyTable].start
 				neededKey = keyTable
 			}
 			flagLine = true
@@ -261,12 +262,12 @@ func (table *SsTable) Find(key string) (string, error) {
 	neededSegmentLine = maxIndex
 	if !flagLine {
 		keyLineError = errors.New(fmt.Sprintf("key %s was not found", key))
-		log.Printf("SsTable with id %s does not contain key", table.id)
+		log.Printf("SsTable with id %s does not contain key", table.Id)
 		return "", keyLineError
 	}
 	var zipper Zip
 	zipper = GZip{}
-	file, err := os.OpenFile(table.dPath, os.O_RDONLY, 0644)
+	file, err := os.OpenFile(table.DPath, os.O_RDONLY, 0644)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +281,7 @@ func (table *SsTable) Find(key string) (string, error) {
 		return "", nil
 	}
 
-	data := make([]byte, table.ind[neededKey].end-table.ind[neededKey].start)
+	data := make([]byte, table.Ind[neededKey].end-table.Ind[neededKey].start)
 	n, err := file.Read(data)
 	if err != nil {
 		return "", nil
@@ -300,14 +301,14 @@ func (table *SsTable) Find(key string) (string, error) {
 			}
 		}
 	}
-	log.Printf("In the ssTable with id %s key was not found", table.id.String())
+	log.Printf("In the ssTable with id %s key was not found", table.Id.String())
 	return value, nil
 }
 
 func (table *SsTable) BuildSparseIndex() {
-	journal, err := os.OpenFile(table.jPath, os.O_RDONLY, 0644)
+	journal, err := os.OpenFile(table.JPath, os.O_RDONLY, 0644)
 	if err != nil {
-		log.Printf("Open ssTable journal with id %s error", table.id.String())
+		log.Printf("Open ssTable journal with id %s error", table.Id.String())
 	}
 	defer func() {
 		if err = journal.Close(); err != nil {
@@ -340,13 +341,13 @@ func (table *SsTable) BuildSparseIndex() {
 		log.Printf("Read sstable journal file error. Err: %s", err)
 	}
 
-	table.ind = index
+	table.Ind = index
 }
 
 func Restore(dirPath string, journalPath string, journalName string) SsTable {
 	idLen := len(journalName) - 4
 	zipPath := dirPath[:len(dirPath)-4] + ".gz"
-	ssTable := SsTable{dPath: zipPath, jPath: journalPath, id: uuid.MustParse(journalName[:idLen]), ind: make(map[string]SparseIndices)}
+	ssTable := SsTable{DPath: zipPath, JPath: journalPath, Id: uuid.MustParse(journalName[:idLen]), Ind: make(map[string]SparseIndices)}
 	ssTable.BuildSparseIndex()
 	return ssTable
 }

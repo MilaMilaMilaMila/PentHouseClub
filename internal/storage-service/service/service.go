@@ -5,22 +5,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"PentHouseClub/internal/storage-service/storage"
 )
 
-type Storage interface {
-	Get(key string) (string, error)
-	Set(key string, value string) error
-	GC()
-}
-
 type StorageServiceImpl struct {
-	Storage Storage
+	Storage storage.Storage
 }
 
-// TODO нужен конструктор
 func (s StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
-	value, getFunctionErr := s.Storage.Get(key)
+	value, getFunctionErr := s.Storage.Get(r.Context(), key)
 
 	respMessage := "OK"
 	respError := ""
@@ -32,9 +27,11 @@ func (s StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := make(map[string]string)
+
 	resp["value"] = value
 	resp["message"] = respMessage
 	resp["error"] = respError
+
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
 		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)
@@ -53,7 +50,8 @@ func (s StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
 
 	respMessage := "OK"
 	respError := ""
-	setFunctionErr := s.Storage.Set(key, value)
+
+	setFunctionErr := s.Storage.Set(r.Context(), key, value)
 	if setFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Set function error. Err: %s", setFunctionErr)
@@ -63,6 +61,7 @@ func (s StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
 	resp := make(map[string]string)
 	resp["status"] = respMessage
 	resp["error"] = respError
+
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
 		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)
