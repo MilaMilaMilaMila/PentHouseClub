@@ -7,17 +7,17 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"net/http"
+	"os"
 )
 
-func readConfig() *config.LSMconfig {
-	conf := config.New()
-	return conf
-}
-
 func main() {
-	conf := readConfig()
+	cfg, err := config.New()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	var app storage_service.App
-	var storageService = app.Start(*conf)
+	var storageService = app.Start(*cfg)
 	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")
@@ -25,9 +25,6 @@ func main() {
 	http.HandleFunc(getUrl, storageService.Get)
 	http.HandleFunc(setUrl, storageService.Set)
 
-	//line := scanner.Text()
-	//lineElements := strings.Split(line, "=")
-	//addr := lineElements[1]
 	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
 	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }
