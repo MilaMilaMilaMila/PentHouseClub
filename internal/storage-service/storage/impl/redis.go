@@ -18,13 +18,14 @@ type RedisImpl struct {
 
 // NewRedis returns a new instance of RedisImpl.
 func NewRedis(defaultTTL time.Duration) *RedisImpl {
+	fmt.Println("Creating redis implementation")
 	return &RedisImpl{
 		defaultTTL: defaultTTL,
 	}
 }
 
 // Connect establish connection to redis cluster and makes ping.
-func (r *RedisImpl) Connect(ctx context.Context) error {
+func (r *RedisImpl) Connect() error {
 	r.client = redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{
 			"172.28.1.10:6379",
@@ -34,11 +35,12 @@ func (r *RedisImpl) Connect(ctx context.Context) error {
 			"172.28.1.14:6379",
 			"172.28.1.15:6379",
 		},
+		Password: "bitnami",
 	})
 
-	if err := r.client.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("ping redis cluster: %w", err)
-	}
+	//if err := r.client.Ping(ctx).Err(); err != nil {
+	//	return fmt.Errorf("ping redis cluster: %w", err)
+	//}
 
 	return nil
 }

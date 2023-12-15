@@ -14,5 +14,11 @@ func main() {
 		os.Exit(1)
 	}
 	var app storage_service.App
-	app.Start(*cfg)
+	if cfg.Type == "avlTree" {
+		app.Start(*cfg)
+		fmt.Println("Starting avl tree")
+	} else {
+		app.StartRedis(*cfg)
+	}
+
 }

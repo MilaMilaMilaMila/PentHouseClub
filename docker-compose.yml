@@ -2,6 +2,9 @@ services:
   client:
     build:
       dockerfile: build/ClientDockerfile
+      context: .
+    tty: true
+    stdin_open: true
     environment:
       HOST: storage
       PORT: 8080
@@ -11,11 +14,15 @@ services:
   storage:
     build:
       dockerfile: build/ServiceDockerfile
+      context: .
     environment:
       MTSIZE: 210
       SSTABLESEGLEN: 50
       SSTABLEDIR: ssTables
       JOURNALPATH: WAL
+      GCPERIODSEC: 10s
+      TYPE: redis
+      REDISTIME: 10m0s
     volumes:
       - LSMstorage:/app/ssTables
     networks:

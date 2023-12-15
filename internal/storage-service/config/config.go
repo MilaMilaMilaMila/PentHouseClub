@@ -12,11 +12,13 @@ type LSMconfig struct {
 	SSTDir      string
 	JPath       string
 	GCperiodSec time.Duration
+	RedisTime   time.Duration
+	Type        string
 }
 
-// TODO скопипастить конфиг из стартапа
 func New() (*LSMconfig, error) {
 	gcPeriodSec, err := time.ParseDuration(os.Getenv("GCPERIODSEC"))
+	redisTime, err := time.ParseDuration(os.Getenv("REDISTIME"))
 	if err != nil {
 		return nil, err
 	}
@@ -26,6 +28,8 @@ func New() (*LSMconfig, error) {
 		SSTDir:      getEnv("SSTABLEDIR", "ssTables"),
 		JPath:       getEnv("JOURNALPATH", "WAL"),
 		GCperiodSec: gcPeriodSec,
+		RedisTime:   redisTime,
+		Type:        getEnv("TYPE", "avlTree"),
 	}, nil
 }
 

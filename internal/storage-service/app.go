@@ -2,6 +2,7 @@ package storage_service
 
 import (
 	"bufio"
+
 	"fmt"
 	"log"
 	"net/http"
@@ -136,4 +137,22 @@ func GetWorkDirAbsPath() string {
 	currentDir, _ := os.Getwd()
 	f, _ := filepath.Abs(currentDir)
 	return f
+}
+
+func (a App) StartRedis(cfg config.LSMconfig) {
+
+	r := impl.NewRedis(cfg.RedisTime)
+
+	r.Connect()
+	storageService := service.StorageServiceImpl{Storage: r}
+	viper.SetDefault("listen", ":8080")
+	setUrl := fmt.Sprintf("/keys/set")
+	getUrl := fmt.Sprintf("/keys/get")
+
+	http.HandleFunc(getUrl, storageService.Get)
+	http.HandleFunc(setUrl, storageService.Set)
+
+	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
+	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
+
 }

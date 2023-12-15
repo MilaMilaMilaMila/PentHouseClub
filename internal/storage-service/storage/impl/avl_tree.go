@@ -33,7 +33,7 @@ const minNumberOfTables = 2
 func (s *AvlTreeImpl) GC() {
 	ticker := time.NewTicker(s.MergePeriodSec)
 	for _ = range ticker.C {
-		fmt.Println("tick start")
+		fmt.Println("tick start !")
 		//s.Mutex.Lock()
 		if len(*s.SsTables) >= minNumberOfTables && !s.IsMerged {
 
@@ -145,7 +145,7 @@ func GetFileNamesInDir(name string) []string {
 		return make([]string, 0)
 	}
 	defer f.Close()
-	// TODO обработать ошибачккю
+	// TODO обработать ошибку
 	files, _ := os.ReadDir(name)
 	fileNames, err := f.Readdirnames(len(files))
 	if err == io.EOF {
