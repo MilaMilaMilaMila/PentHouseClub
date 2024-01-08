@@ -2,6 +2,7 @@ package storage_service
 
 import (
 	"bufio"
+	"strconv"
 
 	"fmt"
 	"log"
@@ -31,40 +32,12 @@ type Storage interface {
 }
 
 type App struct {
-	Storage
 	StorageService
 }
 
-func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) {
-	var storageService StorageService
+func (app App) Init(configInfo config.LSMconfig, memTables []storage.MemTable, journalPath string, ssTables map[int][]storage.SsTable) {
 	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
-	err := os.MkdirAll(dirPath, 0777)
-	if err != nil {
-		log.Printf("error occuring while creating ssTables dir. Err: %s", err)
-	}
-	err = os.MkdirAll(journalPath, 0777)
-	if err != nil {
-		log.Printf("error occuring while creating journal dir. Err: %s", err)
-	}
-	merger := &storage.MergerImpl{
-		MemNewFileLimit:      memTable.MaxSize,
-		StorageSstDirPath:    dirPath,
-		SsTableSegmentLength: configInfo.SSTsegLen,
-	}
-	storage := impl.AvlTreeImpl{
-		MemTable:             memTable,
-		SsTableSegmentLength: configInfo.SSTsegLen,
-		SsTableDir:           dirPath,
-		SsTables:             ssTables,
-		JournalPath:          journalPath,
-		Merger:               merger,
-		MergePeriodSec:       configInfo.GCperiodSec,
-		IsMerged:             true,
-	}
-
-	go storage.GC()
-
-	storageService = service.StorageServiceImpl{Storage: &storage}
+	storageService := service.NewSharder(configInfo, memTables, journalPath, ssTables, dirPath)
 	viper.SetDefault("listen", ":8080")
 	setUrl := fmt.Sprintf("/keys/set")
 	getUrl := fmt.Sprintf("/keys/get")
@@ -74,28 +47,33 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 }
 
 func (app App) Start(configInfo config.LSMconfig) {
-	var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
-		MaxSize:  configInfo.MtSize,
-		CurrSize: new(uintptr)}
+	var memTables []storage.MemTable
 	journalPath := filepath.Join(GetWorkDirAbsPath(), configInfo.JPath)
-	journalName, _ := os.ReadDir(journalPath)
-	if len(journalName) != 0 {
-		log.Printf("Restoring AVL tree")
-		memTable.AvlTree, *memTable.CurrSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName[0].Name()))
-	}
-	ssTablesDir := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
-	ssTablesJournalPath := filepath.Join(ssTablesDir, "journal")
-	ssTablesjournalName, _ := os.ReadDir(ssTablesJournalPath)
-	var ssTables = new([]storage.SsTable)
-	if len(ssTablesjournalName) != 0 {
-		log.Printf("Restoring ssTables")
-		for _, journal := range ssTablesjournalName {
-			journalPath := filepath.Join(ssTablesJournalPath, journal.Name())
-			ssTableName := filepath.Join(ssTablesDir, journal.Name())
-			*ssTables = append(*ssTables, storage.Restore(ssTableName, journalPath, journal.Name()))
+	var ssTables map[int][]storage.SsTable
+	for i := 0; i < configInfo.SectionCount; i++ {
+		var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
+			MaxSize:  configInfo.MtSize,
+			CurrSize: new(uintptr)}
+		newJournalPath := journalPath + strconv.Itoa(i)
+		journalName, _ := os.ReadDir(newJournalPath)
+		if len(journalName) != 0 {
+			log.Printf("Restoring AVL tree")
+			memTable.AvlTree, *memTable.CurrSize = app.RestoreAvlTree(filepath.Join(newJournalPath, journalName[0].Name()))
 		}
+		ssTablesDir := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir) + strconv.Itoa(i)
+		ssTablesJournalPath := filepath.Join(ssTablesDir, "journal")
+		ssTablesjournalName, _ := os.ReadDir(ssTablesJournalPath)
+		if len(ssTablesjournalName) != 0 {
+			log.Printf("Restoring ssTables")
+			for _, journal := range ssTablesjournalName {
+				journalPath := filepath.Join(ssTablesJournalPath, journal.Name())
+				ssTableName := filepath.Join(ssTablesDir, journal.Name())
+				ssTables[i] = append(ssTables[i], storage.Restore(ssTableName, journalPath, journal.Name()))
+			}
+		}
+		memTables = append(memTables, memTable)
 	}
-	app.Init(configInfo, memTable, journalPath, ssTables)
+	app.Init(configInfo, memTables, journalPath, ssTables)
 
 	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
 	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)

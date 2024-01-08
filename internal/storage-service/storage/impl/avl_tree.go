@@ -19,7 +19,7 @@ import (
 type AvlTreeImpl struct {
 	Mutex                sync.RWMutex
 	MemTable             storage.MemTable
-	SsTables             *[]storage.SsTable
+	SsTables             []storage.SsTable
 	SsTableSegmentLength int64
 	SsTableDir           string
 	JournalPath          string
@@ -35,11 +35,11 @@ func (s *AvlTreeImpl) GC() {
 	for _ = range ticker.C {
 		fmt.Println("tick start !")
 		//s.Mutex.Lock()
-		if len(*s.SsTables) >= minNumberOfTables && !s.IsMerged {
+		if len(s.SsTables) >= minNumberOfTables && !s.IsMerged {
 
 			resultCh := make(chan []storage.SsTable)
 			errCh := make(chan error)
-			go s.Merger.MergeAndCompaction(*s.SsTables, resultCh, errCh)
+			go s.Merger.MergeAndCompaction(s.SsTables, resultCh, errCh)
 			fmt.Println("tick end")
 			resultSsTables := <-resultCh
 			err := <-errCh
@@ -47,7 +47,7 @@ func (s *AvlTreeImpl) GC() {
 				panic(err)
 			}
 
-			s.SsTables = &resultSsTables
+			s.SsTables = resultSsTables
 			s.IsMerged = true
 
 		}
@@ -92,7 +92,7 @@ func (s *AvlTreeImpl) Set(_ context.Context, key string, value string) error {
 			log.Printf("error occuring while deleting journal. Err: %s", err)
 		}
 
-		*s.SsTables = append(*s.SsTables, newTable)
+		s.SsTables = append(s.SsTables, newTable)
 		s.IsMerged = false
 	} else {
 		now := time.Now()
@@ -127,8 +127,8 @@ func (s *AvlTreeImpl) Get(_ context.Context, key string) (string, error) {
 		return val, err
 	}
 
-	for i := len(*s.SsTables) - 1; i >= 0; i-- {
-		ssTable := (*s.SsTables)[i]
+	for i := len(s.SsTables) - 1; i >= 0; i-- {
+		ssTable := (s.SsTables)[i]
 		val, err = ssTable.Find(key)
 		if val != "" {
 			return val, err

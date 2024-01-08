@@ -23,6 +23,7 @@ services:
       GCPERIODSEC: 10s
       TYPE: redis
       REDISTIME: 10m0s
+      SECTIONCOUNT: 2
     volumes:
       - LSMstorage:/app/ssTables
     networks:

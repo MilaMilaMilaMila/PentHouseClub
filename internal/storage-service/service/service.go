@@ -1,12 +1,14 @@
 package service
 
 import (
+	"PentHouseClub/internal/storage-service/config"
+	"PentHouseClub/internal/storage-service/storage"
+	"PentHouseClub/internal/storage-service/storage/impl"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-
-	"PentHouseClub/internal/storage-service/storage"
+	"os"
 )
 
 type StorageServiceImpl struct {
@@ -72,4 +74,36 @@ func (s StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
 	}
 
 	return
+}
+
+func NewStorageServiceImpl(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables []storage.SsTable, dirPath string) StorageServiceImpl {
+	err := os.MkdirAll(dirPath, 0777)
+	if err != nil {
+		log.Printf("error occuring while creating ssTables dir. Err: %s", err)
+	}
+	err = os.MkdirAll(journalPath, 0777)
+	if err != nil {
+		log.Printf("error occuring while creating journal dir. Err: %s", err)
+	}
+	merger := &storage.MergerImpl{
+		MemNewFileLimit:      memTable.MaxSize,
+		StorageSstDirPath:    dirPath,
+		SsTableSegmentLength: configInfo.SSTsegLen,
+	}
+	storage := impl.AvlTreeImpl{
+		MemTable:             memTable,
+		SsTableSegmentLength: configInfo.SSTsegLen,
+		SsTableDir:           dirPath,
+		SsTables:             ssTables,
+		JournalPath:          journalPath,
+		Merger:               merger,
+		MergePeriodSec:       configInfo.GCperiodSec,
+		IsMerged:             true,
+	}
+
+	go storage.GC()
+
+	s := StorageServiceImpl{Storage: &storage}
+
+	return s
 }
