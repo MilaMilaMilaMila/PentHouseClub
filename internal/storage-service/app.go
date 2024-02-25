@@ -1,25 +1,42 @@
 package storage_service
 
 import (
-	"PentHouseClub/internal/storage-service/config"
-	"PentHouseClub/internal/storage-service/service"
-	"PentHouseClub/internal/storage-service/storage"
 	"bufio"
-	"gopkg.in/OlexiyKhokhlov/avltree.v2"
+
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"unsafe"
+
+	"PentHouseClub/internal/storage-service/config"
+	"PentHouseClub/internal/storage-service/service"
+	"PentHouseClub/internal/storage-service/storage"
+	"PentHouseClub/internal/storage-service/storage/impl"
+	"github.com/spf13/viper"
+	"gopkg.in/OlexiyKhokhlov/avltree.v2"
 )
 
-type App struct {
-	storage.Storage
-	service.StorageService
+type StorageService interface {
+	Get(w http.ResponseWriter, r *http.Request)
+	Set(w http.ResponseWriter, r *http.Request)
 }
 
-func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) service.StorageService {
-	var storageService service.StorageService
+type Storage interface {
+	Get(key string) (string, error)
+	Set(key string, value string) error
+	GC()
+}
+
+type App struct {
+	Storage
+	StorageService
+}
+
+func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, journalPath string, ssTables *[]storage.SsTable) {
+	var storageService StorageService
 	dirPath := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
 	err := os.MkdirAll(dirPath, 0777)
 	if err != nil {
@@ -29,12 +46,12 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 	if err != nil {
 		log.Printf("error occuring while creating journal dir. Err: %s", err)
 	}
-	merger := storage.MergerImpl{
+	merger := &storage.MergerImpl{
 		MemNewFileLimit:      memTable.MaxSize,
 		StorageSstDirPath:    dirPath,
 		SsTableSegmentLength: configInfo.SSTsegLen,
 	}
-	storage := storage.StorageImpl{
+	storage := impl.AvlTreeImpl{
 		MemTable:             memTable,
 		SsTableSegmentLength: configInfo.SSTsegLen,
 		SsTableDir:           dirPath,
@@ -42,14 +59,21 @@ func (app App) Init(configInfo config.LSMconfig, memTable storage.MemTable, jour
 		JournalPath:          journalPath,
 		Merger:               merger,
 		MergePeriodSec:       configInfo.GCperiodSec,
+		IsMerged:             true,
 	}
-	go storage.GC()
-	storageService = service.StorageServiceImpl{Storage: &storage}
 
-	return storageService
+	go storage.GC()
+
+	storageService = service.StorageServiceImpl{Storage: &storage}
+	viper.SetDefault("listen", ":8080")
+	setUrl := fmt.Sprintf("/keys/set")
+	getUrl := fmt.Sprintf("/keys/get")
+
+	http.HandleFunc(getUrl, storageService.Get)
+	http.HandleFunc(setUrl, storageService.Set)
 }
 
-func (app App) Start(configInfo config.LSMconfig) service.StorageService {
+func (app App) Start(configInfo config.LSMconfig) {
 	var memTable = storage.MemTable{AvlTree: avltree.NewAVLTreeOrderedKey[string, string](),
 		MaxSize:  configInfo.MtSize,
 		CurrSize: new(uintptr)}
@@ -59,7 +83,6 @@ func (app App) Start(configInfo config.LSMconfig) service.StorageService {
 		log.Printf("Restoring AVL tree")
 		memTable.AvlTree, *memTable.CurrSize = app.RestoreAvlTree(filepath.Join(journalPath, journalName[0].Name()))
 	}
-	os.RemoveAll(journalPath)
 	ssTablesDir := filepath.Join(GetWorkDirAbsPath(), configInfo.SSTDir)
 	ssTablesJournalPath := filepath.Join(ssTablesDir, "journal")
 	ssTablesjournalName, _ := os.ReadDir(ssTablesJournalPath)
@@ -72,7 +95,10 @@ func (app App) Start(configInfo config.LSMconfig) service.StorageService {
 			*ssTables = append(*ssTables, storage.Restore(ssTableName, journalPath, journal.Name()))
 		}
 	}
-	return app.Init(configInfo, memTable, journalPath, ssTables)
+	app.Init(configInfo, memTable, journalPath, ssTables)
+
+	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
+	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
 }
 
 func (app App) RestoreAvlTree(journalPath string) (*avltree.AVLTree[string, string], uintptr) {
@@ -111,4 +137,22 @@ func GetWorkDirAbsPath() string {
 	currentDir, _ := os.Getwd()
 	f, _ := filepath.Abs(currentDir)
 	return f
+}
+
+func (a App) StartRedis(cfg config.LSMconfig) {
+
+	r := impl.NewRedis(cfg.RedisTime)
+
+	r.Connect()
+	storageService := service.StorageServiceImpl{Storage: r}
+	viper.SetDefault("listen", ":8080")
+	setUrl := fmt.Sprintf("/keys/set")
+	getUrl := fmt.Sprintf("/keys/get")
+
+	http.HandleFunc(getUrl, storageService.Get)
+	http.HandleFunc(setUrl, storageService.Set)
+
+	setListenPortError := http.ListenAndServe(viper.GetString("listen"), nil)
+	log.Printf("Listen and serve port failed. Err: %s", setListenPortError)
+
 }

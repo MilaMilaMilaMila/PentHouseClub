@@ -8,11 +8,6 @@ import (
 	"os"
 )
 
-type Zip interface {
-	Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64)
-	Unzip(segment *[]byte) []byte
-}
-
 type GZip struct{}
 
 func (z GZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segmentLength int64) (string, map[string]SparseIndices, int64) {
@@ -70,7 +65,7 @@ func (z GZip) Zip(dirPath string, sparseIndex *map[string]SparseIndices, segment
 		if err != nil {
 			log.Printf("Zip sstable segment error. Err: %s", err)
 		}
-		newI[keyTable] = SparseIndices{newSeg, int64(n2)}
+		newI[keyTable] = SparseIndices{newSeg, newSeg + int64(n2)}
 		newSeg += int64(n2)
 
 		if f == false {

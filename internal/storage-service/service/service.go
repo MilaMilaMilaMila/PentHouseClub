@@ -1,28 +1,21 @@
 package service
 
 import (
-	"PentHouseClub/internal/storage-service/storage"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-)
 
-type StorageService interface {
-	Get(w http.ResponseWriter, r *http.Request)
-	Set(w http.ResponseWriter, r *http.Request)
-}
+	"PentHouseClub/internal/storage-service/storage"
+)
 
 type StorageServiceImpl struct {
 	Storage storage.Storage
 }
 
-func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
+func (s StorageServiceImpl) Get(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
-	value_channel := make(chan string)
-	getFunctionErr_channel := make(chan error)
-	go storageService.Storage.Get(key, value_channel, getFunctionErr_channel)
-	value, getFunctionErr := <-value_channel, <-getFunctionErr_channel
+	value, getFunctionErr := s.Storage.Get(r.Context(), key)
 
 	respMessage := "OK"
 	respError := ""
@@ -34,9 +27,11 @@ func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Requ
 	}
 
 	resp := make(map[string]string)
+
 	resp["value"] = value
 	resp["message"] = respMessage
 	resp["error"] = respError
+
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
 		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)
@@ -49,15 +44,14 @@ func (storageService StorageServiceImpl) Get(w http.ResponseWriter, r *http.Requ
 	return
 }
 
-func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
+func (s StorageServiceImpl) Set(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	value := r.URL.Query().Get("value")
 
 	respMessage := "OK"
 	respError := ""
-	setFunctionErr_channel := make(chan error)
-	go storageService.Storage.Set(key, value, setFunctionErr_channel)
-	setFunctionErr := <-setFunctionErr_channel
+
+	setFunctionErr := s.Storage.Set(r.Context(), key, value)
 	if setFunctionErr != nil {
 		respMessage = "FAILED"
 		respError = fmt.Sprintf("Set function error. Err: %s", setFunctionErr)
@@ -67,6 +61,7 @@ func (storageService StorageServiceImpl) Set(w http.ResponseWriter, r *http.Requ
 	resp := make(map[string]string)
 	resp["status"] = respMessage
 	resp["error"] = respError
+
 	jsonResp, parseJsonErr := json.Marshal(resp)
 	if parseJsonErr != nil {
 		log.Printf("Error happened in JSON marshal. Err: %s", parseJsonErr)

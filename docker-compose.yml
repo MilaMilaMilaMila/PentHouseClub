@@ -1,25 +1,126 @@
 services:
   client:
-    image: client:latest
     build:
       dockerfile: build/ClientDockerfile
+      context: .
     tty: true
     stdin_open: true
     environment:
       HOST: storage
       PORT: 8080
+    networks:
+      - app_network
 
   storage:
-    image: storage:latest
     build:
       dockerfile: build/ServiceDockerfile
+      context: .
     environment:
       MTSIZE: 210
       SSTABLESEGLEN: 50
       SSTABLEDIR: ssTables
       JOURNALPATH: WAL
+      GCPERIODSEC: 10s
+      TYPE: redis
+      REDISTIME: 10m0s
     volumes:
       - LSMstorage:/app/ssTables
+    networks:
+      - app_network
+
+  redis-node-0:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-0:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.10
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-1:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-1:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.11
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-2:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-2:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.12
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-3:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-3:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.13
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-4:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-4:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.14
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+
+  redis-node-5:
+    image: docker.io/bitnami/redis-cluster:7.2
+    volumes:
+      - redis-cluster_data-5:/bitnami/redis/data
+    networks:
+      app_network:
+        ipv4_address: 172.28.1.15
+    depends_on:
+      - redis-node-0
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+    environment:
+      - 'REDIS_PASSWORD=bitnami'
+      - 'REDISCLI_AUTH=bitnami'
+      - 'REDIS_CLUSTER_REPLICAS=3'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+      - 'REDIS_CLUSTER_CREATOR=yes'
 
 volumes:
   LSMstorage:
+  redis-cluster_data-0:
+    driver: local
+  redis-cluster_data-1:
+    driver: local
+  redis-cluster_data-2:
+    driver: local
+  redis-cluster_data-3:
+    driver: local
+  redis-cluster_data-4:
+    driver: local
+  redis-cluster_data-5:
+    driver: local
+
+networks:
+  app_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16

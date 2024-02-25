@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type LSMconfig struct {
@@ -10,17 +11,26 @@ type LSMconfig struct {
 	SSTsegLen   int64
 	SSTDir      string
 	JPath       string
-	GCperiodSec int
+	GCperiodSec time.Duration
+	RedisTime   time.Duration
+	Type        string
 }
 
-func New() *LSMconfig {
+func New() (*LSMconfig, error) {
+	gcPeriodSec, err := time.ParseDuration(os.Getenv("GCPERIODSEC"))
+	redisTime, err := time.ParseDuration(os.Getenv("REDISTIME"))
+	if err != nil {
+		return nil, err
+	}
 	return &LSMconfig{
 		MtSize:      uintptr(getEnvAsInt("MTSIZE", 300)),
 		SSTsegLen:   int64(getEnvAsInt("SSTABLESEGLEN", 100)),
 		SSTDir:      getEnv("SSTABLEDIR", "ssTables"),
 		JPath:       getEnv("JOURNALPATH", "WAL"),
-		GCperiodSec: getEnvAsInt("GCPERIODSEC", 30),
-	}
+		GCperiodSec: gcPeriodSec,
+		RedisTime:   redisTime,
+		Type:        getEnv("TYPE", "avlTree"),
+	}, nil
 }
 
 func getEnv(key string, defaultVal string) string {
